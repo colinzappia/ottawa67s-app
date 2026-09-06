@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ottawa 67's Broadcast Toolkit — 2026-27</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>Ottawa <span>67's</span> Broadcast Toolkit — 2026-27</h1>
+  <div class="status" id="statusText">Loading…</div>
+</header>
+
+<div class="tabs no-print">
+  <button class="tab-btn active" data-tab="board">Spotting Board</button>
+  <button class="tab-btn" data-tab="log">Game Log &amp; Aggregates</button>
+  <button class="tab-btn" data-tab="players">Player Stats</button>
+  <button class="tab-btn" data-tab="goals">Goals Log</button>
+</div>
+
+<!-- ============ TAB 1: SPOTTING BOARD ============ -->
+<div class="tab-panel active" id="panel-board">
+  <div class="btn-row no-print" style="margin-bottom:14px;">
+    <button onclick="window.print()">🖨️ Print Board</button>
+  </div>
+
+  <div class="top-meta">
+    <div class="meta-box"><label>Matchup</label><div contenteditable="true">AWAY at HOME</div></div>
+    <div class="meta-box"><label>Date / Time</label><div contenteditable="true">Date, Puck Drop</div></div>
+    <div class="meta-box"><label>Venue</label><div contenteditable="true">Arena Name</div></div>
+    <div class="meta-box"><label>Broadcast</label><div contenteditable="true">Network / Booth Partners</div></div>
+  </div>
+
+  <div class="teams">
+    <div class="team-panel away">
+      <div class="team-header"><span contenteditable="true">AWAY TEAM</span><span contenteditable="true">Record</span></div>
+      <div class="section-label">Forward Lines</div>
+      <div class="line-row"><span class="tag">L1</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
+      <div class="line-row"><span class="tag">L2</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
+      <div class="line-row"><span class="tag">L3</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
+      <div class="line-row"><span class="tag">L4</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
+      <div class="section-label">Defense Pairs</div>
+      <div class="dpairs">
+        <div class="line-row"><span class="tag">D1</span><span contenteditable="true">LD</span><span contenteditable="true">RD</span></div>
+        <div class="line-row"><span class="tag">D2</span><span contenteditable="true">LD</span><span contenteditable="true">RD</span></div>
+        <div class="line-row"><span class="tag">D3</span><span contenteditable="true">LD</span><span contenteditable="true">RD</span></div>
+      </div>
+      <div class="section-label">Goalies</div>
+      <div class="goalies">
+        <div class="line-row"><span class="tag">G1</span><span contenteditable="true">Starter</span><span contenteditable="true">Record / GAA / SV%</span></div>
+        <div class="line-row"><span class="tag">G2</span><span contenteditable="true">Backup</span><span contenteditable="true">Record / GAA / SV%</span></div>
+      </div>
+      <div class="photo-block no-print">
+        <label>Lines Photo (optional)</label>
+        <input type="file" accept="image/*" id="awayPhotoInput">
+        <img id="awayPhotoPreview" class="photo-preview">
+        <div class="btn-row"><button class="small ghost" id="awayPhotoRemove">Remove Photo</button></div>
+      </div>
+      <img id="awayPhotoPrint" class="photo-preview" style="display:none;">
+    </div>
+
+    <div class="team-panel home">
+      <div class="team-header"><span contenteditable="true">HOME TEAM</span><span contenteditable="true">Record</span></div>
+      <div class="section-label">Forward Lines</div>
+      <div class="line-row"><span class="tag">L1</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
+      <div class="line-row"><span class="tag">L2</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
+      <div class="line-row"><span class="tag">L3</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
+      <div class="line-row"><span class="tag">L4</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
+      <div class="section-label">Defense Pairs</div>
+      <div class="dpairs">
+        <div class="line-row"><span class="tag">D1</span><span contenteditable="true">LD</span><span contenteditable="true">RD</span></div>
+        <div class="line-row"><span class="tag">D2</span><span contenteditable="true">LD</span><span contenteditable="true">RD</span></div>
+        <div class="line-row"><span class="tag">D3</span><span contenteditable="true">LD</span><span contenteditable="true">RD</span></div>
+      </div>
+      <div class="section-label">Goalies</div>
+      <div class="goalies">
+        <div class="line-row"><span class="tag">G1</span><span contenteditable="true">Starter</span><span contenteditable="true">Record / GAA / SV%</span></div>
+        <div class="line-row"><span class="tag">G2</span><span contenteditable="true">Backup</span><span contenteditable="true">Record / GAA / SV%</span></div>
+      </div>
+      <div class="photo-block no-print">
+        <label>Lines Photo (optional)</label>
+        <input type="file" accept="image/*" id="homePhotoInput">
+        <img id="homePhotoPreview" class="photo-preview">
+        <div class="btn-row"><button class="small ghost" id="homePhotoRemove">Remove Photo</button></div>
+      </div>
+      <img id="homePhotoPrint" class="photo-preview" style="display:none;">
+    </div>
+  </div>
+
+  <div class="special-teams">
+    <div class="st-panel">
+      <h3>Away — Power Play / Penalty Kill</h3>
+      <div class="st-row"><span class="tag">PP1</span><span contenteditable="true">Unit forwards/D</span><span contenteditable="true">%, rank</span></div>
+      <div class="st-row"><span class="tag">PP2</span><span contenteditable="true">Unit forwards/D</span><span contenteditable="true">%, rank</span></div>
+      <div class="st-row"><span class="tag">PK1</span><span contenteditable="true">Unit forwards/D</span><span contenteditable="true">%, rank</span></div>
+      <div class="st-row"><span class="tag">PK2</span><span contenteditable="true">Unit forwards/D</span><span contenteditable="true">%, rank</span></div>
+    </div>
+    <div class="st-panel">
+      <h3>Home — Power Play / Penalty Kill</h3>
+      <div class="st-row"><span class="tag">PP1</span><span contenteditable="true">Unit forwards/D</span><span contenteditable="true">%, rank</span></div>
+      <div class="st-row"><span class="tag">PP2</span><span contenteditable="true">Unit forwards/D</span><span contenteditable="true">%, rank</span></div>
+      <div class="st-row"><span class="tag">PK1</span><span contenteditable="true">Unit forwards/D</span><span contenteditable="true">%, rank</span></div>
+      <div class="st-row"><span class="tag">PK2</span><span contenteditable="true">Unit forwards/D</span><span contenteditable="true">%, rank</span></div>
+    </div>
+  </div>
+
+  <div class="notes-grid">
+    <div class="notes-panel">
+      <h3>Storylines / Talking Points</h3>
+      <div contenteditable="true">
+        • Season series / last meeting result<br>
+        • Milestones to watch (goals, points, games)<br>
+        • Injuries / call-ups / lineup changes<br>
+        • Coaching notes or system changes<br>
+      </div>
+    </div>
+    <div class="notes-panel">
+      <h3>Player Notes / Nicknames / Pronunciations</h3>
+      <div contenteditable="true">
+        • Tricky name pronunciations<br>
+        • Nicknames or on-air shorthand<br>
+        • Hot/cold streaks<br>
+        • Head-to-head matchups to mention<br>
+      </div>
+    </div>
+  </div>
+
+  <div class="officials">
+    <div class="meta-box"><label>Referees</label><div contenteditable="true">Name, Name</div></div>
+    <div class="meta-box"><label>Linesmen</label><div contenteditable="true">Name, Name</div></div>
+    <div class="meta-box"><label>Scratches (Away)</label><div contenteditable="true">Names</div></div>
+    <div class="meta-box"><label>Scratches (Home)</label><div contenteditable="true">Names</div></div>
+  </div>
+</div>
+
+<!-- ============ TAB 2: GAME LOG & AGGREGATES ============ -->
+<div class="tab-panel" id="panel-log">
+  <div class="btn-row" style="align-items:center;margin-bottom:12px;">
+    <label style="margin:0;">Showing:</label>
+    <select id="logFilter" style="width:auto;">
+      <option value="All" selected>All Games</option>
+      <option value="Regular Season">Regular Season</option>
+      <option value="Preseason">Preseason</option>
+      <option value="Playoffs">Playoffs</option>
+    </select>
+  </div>
+  <div class="agg-grid" id="aggGrid"></div>
+  <div class="agg-grid2" id="aggGrid2"></div>
+
+  <form class="panel-form" id="gameForm">
+    <h2>Add Game Summary</h2>
+    <div class="form-grid">
+      <div><label>Game Type</label>
+        <select id="f_gametype">
+          <option value="Regular Season">Regular Season</option>
+          <option value="Preseason">Preseason</option>
+          <option value="Playoffs">Playoffs</option>
+        </select>
+      </div>
+      <div><label>Date</label><input type="date" id="f_date" required></div>
+      <div><label>Opponent</label><input type="text" id="f_opponent" placeholder="e.g. Kingston Frontenacs" required></div>
+      <div><label>Home / Away</label>
+        <select id="f_venue"><option value="Home">Home</option><option value="Away">Away</option></select>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div><label>Result</label>
+        <select id="f_result"><option value="W">Win</option><option value="L">Loss</option><option value="OTL">OT / SO Loss</option></select>
+      </div>
+      <div><label>67's Goals (Final)</label><input type="number" id="f_gf" min="0" required></div>
+      <div><label>Opponent Goals (Final)</label><input type="number" id="f_ga" min="0" required></div>
+      <div><label>Starting Goalie</label><input type="text" id="f_goalie" placeholder="e.g. Nic Whitehead"></div>
+    </div>
+    <div class="form-grid">
+      <div><label>Shots For</label><input type="number" id="f_sf" min="0"></div>
+      <div><label>Shots Against</label><input type="number" id="f_sa" min="0"></div>
+      <div><label>PP Goals</label><input type="number" id="f_ppg" min="0" value="0"></div>
+      <div><label>PP Opportunities</label><input type="number" id="f_ppo" min="0" value="0"></div>
+    </div>
+    <div class="form-grid">
+      <div><label>Times Shorthanded</label><input type="number" id="f_pk_against" min="0" value="0"></div>
+      <div><label>PK Goals Allowed</label><input type="number" id="f_pk_ga" min="0" value="0"></div>
+      <div><label>SH Goals For</label><input type="number" id="f_shgf" min="0" value="0"></div>
+      <div><label>SH Goals Against</label><input type="number" id="f_shga" min="0" value="0"></div>
+    </div>
+    <div class="form-grid">
+      <div><label>Empty Net Goals For</label><input type="number" id="f_engf" min="0" value="0"></div>
+      <div><label>Empty Net Goals Against</label><input type="number" id="f_enga" min="0" value="0"></div>
+      <div><label>Shootout Goals For</label><input type="number" id="f_sogf" min="0" value="0"></div>
+      <div><label>Shootout Goals Against</label><input type="number" id="f_soga" min="0" value="0"></div>
+    </div>
+    <div class="form-grid wide">
+      <div><label>Penalty Shot Goals For</label><input type="number" id="f_psgf" min="0" value="0"></div>
+      <div><label>Penalty Shot Goals Against</label><input type="number" id="f_psga" min="0" value="0"></div>
+    </div>
+    <div class="form-grid wide">
+      <div><label>Attendance (optional)</label><input type="number" id="f_attendance" min="0"></div>
+    </div>
+    <label>Game Summary / Notes</label>
+    <textarea id="f_notes" placeholder="Key goal scorers, storylines, three stars, etc."></textarea>
+    <div class="btn-row">
+      <button type="submit" class="primary" id="submitBtn">Add Game</button>
+      <button type="button" class="ghost" id="cancelEditBtn" style="display:none;">Cancel Edit</button>
+    </div>
+  </form>
+
+  <div class="games-header">
+    <h2>Game-by-Game Log</h2>
+    <button class="ghost" id="exportBtn">Export CSV</button>
+  </div>
+  <div id="gamesList"><div class="hint">Loading…</div></div>
+</div>
+
+<!-- ============ TAB 3: PLAYER STATS ============ -->
+<div class="tab-panel" id="panel-players">
+  <div class="player-select-row">
+    <div><label>Select Game</label><select id="p_gameSelect"></select></div>
+    <div style="flex:0;"><button class="ghost" id="p_refreshGames">Refresh List</button></div>
+  </div>
+
+  <div class="paste-box">
+    <label>Paste OHL Gamesheet Text (copy the full box score section, including the "Skaters" and "Goalies" headers)</label>
+    <textarea id="p_pasteArea" placeholder="Paste the gamesheet text here, then click Parse..."></textarea>
+    <div class="team-import-row">
+      <button class="primary" id="p_parseBtn">Parse Pasted Gamesheet</button>
+      <button class="ghost" id="p_addRowBtn">+ Add Blank Skater Row</button>
+      <select id="p_teamPick" style="width:auto;display:none;"></select>
+      <button class="ghost" id="p_loadTeamBtn" style="display:none;">Load This Team Into Table</button>
+    </div>
+    <div class="hint">Parsing looks for the standard OHL gamesheet layout. Always check the table below and correct anything before saving.</div>
+  </div>
+
+  <h3 class="subhead">Skaters</h3>
+  <table class="stats-table" id="p_statsTable">
+    <thead><tr><th>Player</th><th>Pos</th><th>#</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>SOG</th><th>PIM</th><th>FOW</th><th>FOL</th><th>FO%</th><th></th></tr></thead>
+    <tbody id="p_statsBody"></tbody>
+  </table>
+
+  <h3 class="subhead">Goalies</h3>
+  <table class="stats-table" id="p_goalieTable">
+    <thead><tr><th>Player</th><th>GA</th><th>MIN</th><th>Shots</th><th>Saves</th><th>SV%</th><th>PIM</th><th></th></tr></thead>
+    <tbody id="p_goalieBody"></tbody>
+  </table>
+  <div class="btn-row" style="margin-bottom:10px;">
+    <button class="ghost small" id="p_addGoalieRow">+ Add Blank Goalie Row</button>
+  </div>
+
+  <div class="btn-row" style="margin-bottom:30px;">
+    <button class="primary" id="p_saveGameStats">Save Stats for This Game</button>
+  </div>
+
+  <div class="games-header"><h2>Season Player Totals</h2></div>
+  <div class="season-table-wrap">
+    <table class="stats-table" id="p_seasonTable">
+      <thead><tr><th>Player</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>SOG</th><th>PIM</th><th>FOW</th><th>FOL</th><th>FO%</th></tr></thead>
+      <tbody id="p_seasonBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ============ TAB 4: GOALS LOG ============ -->
+<div class="tab-panel" id="panel-goals">
+  <div class="player-select-row">
+    <div><label>Select Game</label><select id="g_gameSelect"></select></div>
+    <div style="flex:0;"><button class="ghost" id="g_refreshGames">Refresh List</button></div>
+  </div>
+
+  <form class="panel-form" id="goalForm" style="margin-bottom:20px;">
+    <h2>Log a Goal</h2>
+    <div class="form-grid six">
+      <div><label>Period</label>
+        <select id="g_period"><option>1st</option><option>2nd</option><option>3rd</option><option>OT</option><option>SO</option></select>
+      </div>
+      <div><label>Time</label><input type="text" id="g_time" placeholder="e.g. 14:32"></div>
+      <div><label>Team</label>
+        <select id="g_team"><option value="OTT">Ottawa 67's</option><option value="OPP">Opponent</option></select>
+      </div>
+      <div><label>Strength</label>
+        <select id="g_strength">
+          <option value="EV">Even Strength</option>
+          <option value="PP">Power Play</option>
+          <option value="SH">Shorthanded</option>
+          <option value="EN">Empty Net</option>
+          <option value="PS">Penalty Shot</option>
+        </select>
+      </div>
+      <div><label>Scorer</label><input type="text" id="g_scorer" placeholder="Name"></div>
+      <div><label>Assists</label><input type="text" id="g_assists" placeholder="Name, Name"></div>
+    </div>
+    <label>On-Ice / Situation Notes (optional — e.g. opposing players on ice, score at the time)</label>
+    <textarea id="g_notes" placeholder="Optional freeform notes about the situation"></textarea>
+    <div class="btn-row"><button type="submit" class="primary">Add Goal</button></div>
+  </form>
+
+  <h3 class="subhead">Goals — This Game</h3>
+  <table class="stats-table" id="g_goalsTable">
+    <thead><tr><th>Per</th><th>Time</th><th>Team</th><th>Strength</th><th>Scorer</th><th>Assists</th><th>Notes</th><th></th></tr></thead>
+    <tbody id="g_goalsBody"></tbody>
+  </table>
+
+  <div class="games-header"><h2>Season Strength Breakdown (from logged goals)</h2></div>
+  <div class="agg-grid" id="g_seasonAgg"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

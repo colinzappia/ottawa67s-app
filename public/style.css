@@ -1,0 +1,109 @@
+:root{
+  --ink:#111827; --sub:#6b7280; --line:#e5e7eb;
+  --brand:#c8102e; --brand-dark:#8a0b1f;
+  --bg:#ffffff; --panel:#f9fafb;
+  --win:#0f9d58; --loss:#c8102e; --otl:#b8860b;
+  --away:#1c3f95; --home:#c8102e;
+}
+*{box-sizing:border-box;}
+body{font-family:'Helvetica Neue', Arial, sans-serif;background:var(--bg);color:var(--ink);margin:0;padding:20px;max-width:1150px;margin:0 auto;}
+h1{font-size:20px;margin:0;letter-spacing:0.3px;}
+h1 span{color:var(--brand);}
+header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px;}
+.status{font-size:12px;color:var(--sub);}
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--line);flex-wrap:wrap;}
+.tab-btn{padding:10px 14px;font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;}
+.tab-btn.active{color:var(--brand);border-bottom-color:var(--brand);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+button{font-family:inherit;font-size:13px;padding:9px 16px;border-radius:6px;border:1px solid var(--line);background:white;cursor:pointer;font-weight:600;}
+button.primary{background:var(--brand);color:white;border-color:var(--brand);}
+button.primary:hover{background:var(--brand-dark);}
+button:hover{background:#f0f0f0;}
+button.ghost{background:transparent;}
+button.small{font-size:11px;padding:5px 10px;}
+label{font-size:10px;text-transform:uppercase;color:var(--sub);display:block;margin-bottom:3px;letter-spacing:0.3px;}
+input, select, textarea{width:100%;padding:7px 8px;border:1px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;background:white;}
+textarea{resize:vertical;min-height:50px;}
+.form-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px;}
+.form-grid.wide{grid-template-columns:repeat(2,1fr);}
+.form-grid.six{grid-template-columns:repeat(6,1fr);}
+.btn-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;}
+.hint{font-size:11px;color:var(--sub);margin-top:4px;line-height:1.5;}
+
+.top-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
+.meta-box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px;}
+.meta-box label{margin-bottom:2px;}
+.meta-box [contenteditable]{font-size:14px;font-weight:600;outline:none;min-height:18px;}
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.team-panel{border:2px solid var(--line);border-radius:8px;overflow:hidden;}
+.team-panel.away .team-header{background:var(--away);}
+.team-panel.home .team-header{background:var(--home);}
+.team-header{color:white;padding:8px 12px;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;display:flex;justify-content:space-between;align-items:center;}
+.team-header [contenteditable]{outline:none;}
+.section-label{background:var(--panel);font-size:10px;text-transform:uppercase;color:var(--sub);letter-spacing:0.5px;padding:4px 12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-weight:700;}
+.line-row{display:grid;grid-template-columns:28px 1fr 1fr 1fr;gap:4px;padding:4px 12px;font-size:12px;border-bottom:1px solid #f0f0f0;}
+.line-row .tag{color:var(--sub);font-weight:700;font-size:10px;align-self:center;}
+.line-row [contenteditable]{outline:none;border-bottom:1px dashed transparent;padding:2px 0;}
+.line-row [contenteditable]:focus{border-bottom:1px dashed var(--sub);}
+.dpairs .line-row, .goalies .line-row{grid-template-columns:28px 1fr 1fr;}
+.photo-block{padding:10px 12px;border-top:1px solid var(--line);}
+.photo-block label{margin-bottom:4px;}
+.photo-preview{max-width:100%;border-radius:6px;border:1px solid var(--line);margin-top:6px;display:none;}
+.photo-preview.has-img{display:block;}
+.special-teams{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.st-panel{border:1px solid var(--line);border-radius:8px;padding:10px 12px;}
+.st-panel h3{font-size:11px;text-transform:uppercase;color:var(--sub);margin:0 0 6px 0;letter-spacing:0.5px;}
+.st-row{display:grid;grid-template-columns:30px 1fr 1fr;font-size:12px;gap:6px;padding:3px 0;}
+.st-row .tag{color:var(--sub);font-weight:700;font-size:10px;}
+.st-row [contenteditable]{outline:none;border-bottom:1px dashed transparent;}
+.notes-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.notes-panel{border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:110px;}
+.notes-panel h3{font-size:11px;text-transform:uppercase;color:var(--sub);margin:0 0 6px 0;letter-spacing:0.5px;}
+.notes-panel [contenteditable]{font-size:12px;outline:none;line-height:1.6;min-height:80px;}
+.officials{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:16px;}
+@media print{
+  .no-print{display:none !important;}
+  #panel-log,#panel-players,#panel-goals{display:none !important;}
+  body{padding:0;}
+}
+
+.agg-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px;}
+.agg-grid2{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:20px;}
+.agg-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 8px;text-align:center;}
+.agg-card .val{font-size:18px;font-weight:800;color:var(--brand-dark);}
+.agg-card .lbl{font-size:8.5px;text-transform:uppercase;color:var(--sub);letter-spacing:0.3px;margin-top:2px;}
+form.panel-form{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:24px;}
+form.panel-form h2{font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:var(--sub);margin:0 0 12px 0;}
+.games-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.games-header h2{font-size:14px;text-transform:uppercase;letter-spacing:0.5px;margin:0;}
+.game-card{border:1px solid var(--line);border-radius:8px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px;}
+.game-main{flex:1;}
+.game-top{display:flex;align-items:center;gap:10px;margin-bottom:4px;flex-wrap:wrap;}
+.result-pill{font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;color:white;}
+.result-pill.W{background:var(--win);}
+.result-pill.L{background:var(--loss);}
+.result-pill.OTL{background:var(--otl);}
+.game-score{font-weight:700;font-size:15px;}
+.game-date{font-size:11px;color:var(--sub);}
+.game-meta{font-size:11px;color:var(--sub);margin-top:2px;}
+.game-notes{font-size:12px;margin-top:6px;line-height:1.5;}
+.game-actions{display:flex;flex-direction:column;gap:6px;}
+.game-actions button{font-size:11px;padding:5px 10px;}
+.empty-state{text-align:center;color:var(--sub);font-size:13px;padding:30px 10px;border:1px dashed var(--line);border-radius:8px;}
+.type-badge{font-size:9px;text-transform:uppercase;color:var(--sub);border:1px solid var(--line);border-radius:10px;padding:1px 6px;}
+
+.player-select-row{display:flex;gap:10px;align-items:flex-end;margin-bottom:14px;flex-wrap:wrap;}
+.player-select-row > div{flex:1;min-width:200px;}
+table.stats-table{width:100%;border-collapse:collapse;font-size:11.5px;margin-bottom:14px;}
+table.stats-table th, table.stats-table td{border:1px solid var(--line);padding:5px 6px;text-align:center;}
+table.stats-table th{background:var(--panel);font-size:9px;text-transform:uppercase;color:var(--sub);}
+table.stats-table td:first-child, table.stats-table th:first-child{text-align:left;}
+table.stats-table td[contenteditable]{outline:none;}
+table.stats-table td[contenteditable]:focus{background:#fffbea;}
+.row-del{cursor:pointer;color:var(--brand);font-weight:800;}
+.paste-box{margin-bottom:14px;}
+.paste-box textarea{min-height:130px;font-family:monospace;font-size:11px;}
+.team-import-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;}
+.season-table-wrap{overflow-x:auto;}
+h3.subhead{font-size:12px;text-transform:uppercase;letter-spacing:0.4px;color:var(--sub);margin:20px 0 8px 0;}
