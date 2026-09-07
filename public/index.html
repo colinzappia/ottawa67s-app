@@ -24,24 +24,27 @@
 <div class="tab-panel active" id="panel-board">
 
   <div class="board-header">
-    <div class="board-logo-block">
-      <input type="file" accept="image/*" id="logoPhotoInput" class="no-print">
-      <img id="logoPhotoPreview" class="board-logo-img">
-      <div class="btn-row no-print"><button class="small ghost" id="logoPhotoRemove">Remove Logo</button></div>
+    <div class="board-team-block">
+      <input type="file" accept="image/*" id="awayLogoInput" class="no-print">
+      <img id="awayLogoPreview" class="board-logo-img">
+      <div class="btn-row no-print"><button class="small ghost" id="awayLogoRemove">Remove Logo</button></div>
+      <div class="meta-box"><label>Visiting Team</label><div contenteditable="true">Away Team Name</div></div>
     </div>
-    <div class="board-header-fields">
-      <div class="meta-box"><label>Team Name</label><div contenteditable="true">Ottawa 67's</div></div>
-      <div class="meta-box"><label>Matchup</label><div contenteditable="true">AWAY at HOME</div></div>
-      <div class="meta-box"><label>Game Type</label>
-        <select id="boardGameType">
-          <option value="Regular Season">Regular Season</option>
-          <option value="Preseason">Preseason</option>
-          <option value="Playoffs">Playoffs</option>
-        </select>
-      </div>
+    <div class="board-team-block">
+      <input type="file" accept="image/*" id="homeLogoInput" class="no-print">
+      <img id="homeLogoPreview" class="board-logo-img">
+      <div class="btn-row no-print"><button class="small ghost" id="homeLogoRemove">Remove Logo</button></div>
+      <div class="meta-box"><label>Home Team</label><div contenteditable="true">Ottawa 67's</div></div>
     </div>
   </div>
   <div class="top-meta">
+    <div class="meta-box"><label>Game Type</label>
+      <select id="boardGameType">
+        <option value="Regular Season">Regular Season</option>
+        <option value="Preseason">Preseason</option>
+        <option value="Playoffs">Playoffs</option>
+      </select>
+    </div>
     <div class="meta-box"><label>Date</label><div contenteditable="true">Date</div></div>
     <div class="meta-box"><label>Puck Drop</label><div contenteditable="true">Time</div></div>
     <div class="meta-box"><label>End Time</label><div contenteditable="true">Time</div></div>

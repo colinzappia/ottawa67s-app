@@ -31,7 +31,8 @@ async function loadPhotos() {
     const photos = await api('/api/photos');
     applyPhoto('away', photos.away);
     applyPhoto('home', photos.home);
-    applyLogo(photos.logo);
+    applyLogo('away', photos.awayLogo);
+    applyLogo('home', photos.homeLogo);
   } catch (e) { /* ignore on first load */ }
 }
 function applyPhoto(team, dataurl) {
@@ -39,8 +40,8 @@ function applyPhoto(team, dataurl) {
   if (dataurl) { preview.src = dataurl; preview.classList.add('has-img'); }
   else { preview.src = ''; preview.classList.remove('has-img'); }
 }
-function applyLogo(dataurl) {
-  const preview = document.getElementById('logoPhotoPreview');
+function applyLogo(side, dataurl) {
+  const preview = document.getElementById(side + 'LogoPreview');
   if (dataurl) { preview.src = dataurl; preview.classList.add('has-img'); }
   else { preview.src = ''; preview.classList.remove('has-img'); }
 }
@@ -68,28 +69,30 @@ function wirePhotoUpload(team) {
 wirePhotoUpload('away');
 wirePhotoUpload('home');
 
-function wireLogoUpload() {
-  const input = document.getElementById('logoPhotoInput');
-  const removeBtn = document.getElementById('logoPhotoRemove');
+function wireLogoUpload(side) {
+  const key = side + 'Logo'; // 'awayLogo' | 'homeLogo'
+  const input = document.getElementById(side + 'LogoInput');
+  const removeBtn = document.getElementById(side + 'LogoRemove');
   input.addEventListener('change', function () {
     const file = input.files[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = async function (e) {
       const dataUrl = e.target.result;
-      applyLogo(dataUrl);
-      try { await api('/api/photos/logo', { method: 'PUT', body: JSON.stringify({ dataurl: dataUrl }) }); }
+      applyLogo(side, dataUrl);
+      try { await api('/api/photos/' + key, { method: 'PUT', body: JSON.stringify({ dataurl: dataUrl }) }); }
       catch (err) { alert('Could not save logo to the server.'); }
     };
     reader.readAsDataURL(file);
   });
   removeBtn.addEventListener('click', async function () {
-    applyLogo(null);
+    applyLogo(side, null);
     input.value = '';
-    try { await api('/api/photos/logo', { method: 'DELETE' }); } catch (e) {}
+    try { await api('/api/photos/' + key, { method: 'DELETE' }); } catch (e) {}
   });
 }
-wireLogoUpload();
+wireLogoUpload('away');
+wireLogoUpload('home');
 
 /* ===================== GAME LOG & AGGREGATES ===================== */
 function filteredGames() {
