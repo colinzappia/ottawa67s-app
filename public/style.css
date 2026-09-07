@@ -31,7 +31,7 @@ textarea{resize:vertical;min-height:50px;}
 .btn-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;}
 .hint{font-size:11px;color:var(--sub);margin-top:4px;line-height:1.5;}
 
-.top-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
+.top-meta{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:18px;}
 .meta-box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px;}
 .meta-box label{margin-bottom:2px;}
 .meta-box [contenteditable]{font-size:14px;font-weight:600;outline:none;min-height:18px;}
@@ -57,6 +57,17 @@ textarea{resize:vertical;min-height:50px;}
 .st-row{display:grid;grid-template-columns:30px 1fr 1fr;font-size:12px;gap:6px;padding:3px 0;}
 .st-row .tag{color:var(--sub);font-weight:700;font-size:10px;}
 .st-row [contenteditable]{outline:none;border-bottom:1px dashed transparent;}
+.special-teams-single{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
+.st-panel-full{border:1px solid var(--line);border-radius:8px;padding:12px 14px;}
+.st-panel-full h3{font-size:12px;text-transform:uppercase;color:var(--ink);margin:0 0 10px 0;letter-spacing:0.5px;font-weight:700;}
+.st-stats-row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+.st-stats-row label{font-size:9px;text-transform:uppercase;color:var(--sub);margin-bottom:3px;letter-spacing:0.3px;}
+.st-stats-row [contenteditable]{font-size:14px;font-weight:700;outline:none;min-height:18px;border-bottom:1px dashed transparent;padding:2px 0;}
+.st-stats-row [contenteditable]:focus{border-bottom:1px dashed var(--sub);}
+@media (max-width:700px){
+  .special-teams-single{grid-template-columns:1fr;}
+  .st-stats-row{grid-template-columns:repeat(3,1fr);}
+}
 .notes-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
 .notes-panel{border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-height:110px;}
 .notes-panel h3{font-size:11px;text-transform:uppercase;color:var(--sub);margin:0 0 6px 0;letter-spacing:0.5px;}
