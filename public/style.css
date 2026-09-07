@@ -31,7 +31,12 @@ textarea{resize:vertical;min-height:50px;}
 .btn-row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;}
 .hint{font-size:11px;color:var(--sub);margin-top:4px;line-height:1.5;}
 
-.top-meta{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:18px;}
+.top-meta{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
+.board-header{display:flex;gap:16px;align-items:flex-start;margin-bottom:14px;}
+.board-logo-block{flex:0 0 110px;text-align:center;}
+.board-logo-img{width:100%;max-width:110px;height:auto;border-radius:6px;border:1px solid var(--line);display:none;margin-bottom:6px;object-fit:contain;}
+.board-logo-img.has-img{display:block;}
+.board-header-fields{flex:1;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
 .meta-box{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 10px;}
 .meta-box label{margin-bottom:2px;}
 .meta-box [contenteditable]{font-size:14px;font-weight:600;outline:none;min-height:18px;}

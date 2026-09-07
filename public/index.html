@@ -22,13 +22,30 @@
 
 <!-- ============ TAB 1: SPOTTING BOARD ============ -->
 <div class="tab-panel active" id="panel-board">
-  <div class="btn-row no-print" style="margin-bottom:14px;">
-    <button onclick="window.print()">🖨️ Print Board</button>
-  </div>
 
+  <div class="board-header">
+    <div class="board-logo-block">
+      <input type="file" accept="image/*" id="logoPhotoInput" class="no-print">
+      <img id="logoPhotoPreview" class="board-logo-img">
+      <div class="btn-row no-print"><button class="small ghost" id="logoPhotoRemove">Remove Logo</button></div>
+    </div>
+    <div class="board-header-fields">
+      <div class="meta-box"><label>Team Name</label><div contenteditable="true">Ottawa 67's</div></div>
+      <div class="meta-box"><label>Matchup</label><div contenteditable="true">AWAY at HOME</div></div>
+      <div class="meta-box"><label>Game Type</label>
+        <select id="boardGameType">
+          <option value="Regular Season">Regular Season</option>
+          <option value="Preseason">Preseason</option>
+          <option value="Playoffs">Playoffs</option>
+        </select>
+      </div>
+    </div>
+  </div>
   <div class="top-meta">
-    <div class="meta-box"><label>Matchup</label><div contenteditable="true">AWAY at HOME</div></div>
-    <div class="meta-box"><label>Date / Time</label><div contenteditable="true">Date, Puck Drop</div></div>
+    <div class="meta-box"><label>Date</label><div contenteditable="true">Date</div></div>
+    <div class="meta-box"><label>Puck Drop</label><div contenteditable="true">Time</div></div>
+    <div class="meta-box"><label>End Time</label><div contenteditable="true">Time</div></div>
+    <div class="meta-box"><label>Attendance</label><div contenteditable="true">—</div></div>
   </div>
 
   <div class="teams">
@@ -56,7 +73,6 @@
         <img id="awayPhotoPreview" class="photo-preview">
         <div class="btn-row"><button class="small ghost" id="awayPhotoRemove">Remove Photo</button></div>
       </div>
-      <img id="awayPhotoPrint" class="photo-preview" style="display:none;">
     </div>
 
     <div class="team-panel home">
@@ -83,7 +99,6 @@
         <img id="homePhotoPreview" class="photo-preview">
         <div class="btn-row"><button class="small ghost" id="homePhotoRemove">Remove Photo</button></div>
       </div>
-      <img id="homePhotoPrint" class="photo-preview" style="display:none;">
     </div>
   </div>
 
