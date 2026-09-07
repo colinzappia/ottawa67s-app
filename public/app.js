@@ -31,18 +31,18 @@ async function loadPhotos() {
     const photos = await api('/api/photos');
     applyPhoto('away', photos.away);
     applyPhoto('home', photos.home);
+    applyLogo(photos.logo);
   } catch (e) { /* ignore on first load */ }
 }
 function applyPhoto(team, dataurl) {
   const preview = document.getElementById(team + 'PhotoPreview');
-  const printImg = document.getElementById(team + 'PhotoPrint');
-  if (dataurl) {
-    preview.src = dataurl; preview.classList.add('has-img');
-    printImg.src = dataurl; printImg.style.display = 'block';
-  } else {
-    preview.src = ''; preview.classList.remove('has-img');
-    printImg.src = ''; printImg.style.display = 'none';
-  }
+  if (dataurl) { preview.src = dataurl; preview.classList.add('has-img'); }
+  else { preview.src = ''; preview.classList.remove('has-img'); }
+}
+function applyLogo(dataurl) {
+  const preview = document.getElementById('logoPhotoPreview');
+  if (dataurl) { preview.src = dataurl; preview.classList.add('has-img'); }
+  else { preview.src = ''; preview.classList.remove('has-img'); }
 }
 function wirePhotoUpload(team) {
   const input = document.getElementById(team + 'PhotoInput');
@@ -67,6 +67,29 @@ function wirePhotoUpload(team) {
 }
 wirePhotoUpload('away');
 wirePhotoUpload('home');
+
+function wireLogoUpload() {
+  const input = document.getElementById('logoPhotoInput');
+  const removeBtn = document.getElementById('logoPhotoRemove');
+  input.addEventListener('change', function () {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function (e) {
+      const dataUrl = e.target.result;
+      applyLogo(dataUrl);
+      try { await api('/api/photos/logo', { method: 'PUT', body: JSON.stringify({ dataurl: dataUrl }) }); }
+      catch (err) { alert('Could not save logo to the server.'); }
+    };
+    reader.readAsDataURL(file);
+  });
+  removeBtn.addEventListener('click', async function () {
+    applyLogo(null);
+    input.value = '';
+    try { await api('/api/photos/logo', { method: 'DELETE' }); } catch (e) {}
+  });
+}
+wireLogoUpload();
 
 /* ===================== GAME LOG & AGGREGATES ===================== */
 function filteredGames() {
