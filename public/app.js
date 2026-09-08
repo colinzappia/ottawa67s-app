@@ -384,6 +384,56 @@ function renderParsedSummaryPreview(teamNames) {
   document.getElementById('p_applyRow').style.display = 'flex';
   document.getElementById('p_applyHint').style.display = 'block';
 }
+function minToSeconds(m) {
+  if (!m) return 0;
+  const parts = m.split(':').map(Number);
+  return (parts[0] || 0) * 60 + (parts[1] || 0);
+}
+
+function parseGameHeader(lines, teamNames) {
+  for (let i = 0; i < lines.length - 4; i++) {
+    if (/^Final/i.test(lines[i + 2]) && /^\d+$/.test(lines[i + 1]) && /^\d+$/.test(lines[i + 3])) {
+      const shortA = lines[i];
+      const scoreA = parseInt(lines[i + 1]);
+      const finalLine = lines[i + 2];
+      const scoreB = parseInt(lines[i + 3]);
+      const shortB = lines[i + 4];
+      const wentOT = /OT/i.test(finalLine);
+      const wentSO = /SO/i.test(finalLine);
+
+      const fullA = teamNames.find(t => t.toLowerCase().endsWith(shortA.toLowerCase()));
+      const fullB = teamNames.find(t => t.toLowerCase().endsWith(shortB.toLowerCase()));
+
+      let ottScore, oppScore, oppFull, venue;
+      if (fullA && /67/.test(fullA)) { ottScore = scoreA; oppScore = scoreB; oppFull = fullB; venue = 'Away'; }
+      else if (fullB && /67/.test(fullB)) { ottScore = scoreB; oppScore = scoreA; oppFull = fullA; venue = 'Home'; }
+      else continue;
+
+      let result;
+      if (ottScore > oppScore) result = 'W';
+      else result = (wentOT || wentSO) ? 'OTL' : 'L';
+
+      let gametype = 'Regular Season';
+      let dateISO = '';
+      for (let j = i + 5; j < Math.min(i + 10, lines.length); j++) {
+        const gm = lines[j].match(/^Game\s*#\d+\s*-\s*(.+)$/i);
+        if (gm) {
+          if (/pre/i.test(gm[1])) gametype = 'Preseason';
+          else if (/playoff/i.test(gm[1])) gametype = 'Playoffs';
+        }
+        const dm = lines[j].match(/^.+?\s-\s(.+?),\s*.+$/);
+        if (dm) {
+          const cleaned = dm[1].replace(/(\d+)(st|nd|rd|th)/i, '$1');
+          const d = new Date(cleaned);
+          if (!isNaN(d.getTime())) dateISO = d.toISOString().slice(0, 10);
+        }
+      }
+      return { opponent: oppFull, venue, result, gf: ottScore, ga: oppScore, gametype, dateISO };
+    }
+  }
+  return null;
+}
+
 async function populatePlayerGameSelect() {
   const sel = document.getElementById('p_gameSelect');
   const sorted = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -490,6 +540,73 @@ document.getElementById('p_addGoalieRow').addEventListener('click', () => {
   rows.push({ name: 'New Goalie', ga: 0, min: '', shots: 0, saves: 0, pim: 0 });
   renderGoalieRows(rows);
 });
+document.getElementById('p_importNewGameBtn').addEventListener('click', async () => {
+  const text = document.getElementById('p_pasteArea').value;
+  if (!text.trim()) { alert('Paste the gamesheet text first.'); return; }
+
+  const teams = parseGamesheetText(text);
+  const teamNames = Object.keys(teams);
+  if (teamNames.length < 2) { alert('Could not find two "Skaters" sections in this text. Make sure you pasted the full gamesheet, including both teams.'); return; }
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const summary = parseShotsAndSpecialTeams(lines);
+  const goalsRaw = parseGoalsEvents(lines);
+  const header = parseGameHeader(lines, teamNames);
+  if (!header) { alert('Could not find the score header (e.g. "67\'s ... Final ... Frontenacs") at the top of the gamesheet. Try the manual Add Game form instead.'); return; }
+
+  const ottIdx = teamNames.findIndex(t => /67/.test(t));
+  if (ottIdx === -1) { alert('Could not identify which parsed team is the 67\'s.'); return; }
+  const oppIdx = ottIdx === 0 ? 1 : 0;
+
+  const ottGoalies = (teams[teamNames[ottIdx]].goalies || []);
+  let starter = '';
+  if (ottGoalies.length) {
+    starter = ottGoalies.slice().sort((a, b) => minToSeconds(b.min) - minToSeconds(a.min))[0].name;
+  }
+
+  const newGame = {
+    gametype: header.gametype, date: header.dateISO || '', opponent: header.opponent || teamNames[oppIdx],
+    venue: header.venue, result: header.result, gf: header.gf, ga: header.ga,
+    sf: summary.shots[ottIdx] ?? 0, sa: summary.shots[oppIdx] ?? 0,
+    ppg: 0, ppo: 0, pk_against: 0, pk_ga: 0,
+    shgf: 0, shga: 0, engf: 0, enga: 0, sogf: 0, soga: 0, psgf: 0, psga: 0,
+    goalie: starter, attendance: '', notes: ''
+  };
+  if (summary.ppFrac[ottIdx]) { const [g_, o_] = summary.ppFrac[ottIdx].split('/').map(n => parseInt(n) || 0); newGame.ppg = g_; newGame.ppo = o_; }
+  if (summary.ppFrac[oppIdx]) { const [g_, o_] = summary.ppFrac[oppIdx].split('/').map(n => parseInt(n) || 0); newGame.pk_ga = g_; newGame.pk_against = o_; }
+
+  const confirmMsg = `Create new game:\n${newGame.venue === 'Home' ? 'vs' : '@'} ${newGame.opponent}\n${newGame.date || '(date not detected — you can fix it after)'}\nFinal: ${newGame.gf}-${newGame.ga} (${newGame.result})\nType: ${newGame.gametype}\n\nThis will also save all skater/goalie stats and ${goalsRaw.length} goal(s). Continue?`;
+  if (!confirm(confirmMsg)) return;
+
+  const created = await api('/api/games', { method: 'POST', body: JSON.stringify(newGame) });
+  const gid = created.id;
+
+  await api('/api/player-stats/' + gid, {
+    method: 'PUT',
+    body: JSON.stringify({ skaters: teams[teamNames[ottIdx]].skaters, goalies: teams[teamNames[ottIdx]].goalies })
+  });
+
+  const idx = buildTeamIndex(teams);
+  const ottTeamName = teamNames[ottIdx];
+  for (const g of goalsRaw) {
+    const teamName = idx[normalizeName(g.scorerName)];
+    const teamCode = teamName === ottTeamName ? 'OTT' : 'OPP';
+    await api('/api/goals/' + gid, {
+      method: 'POST',
+      body: JSON.stringify({ period: g.period, time: g.time, team: teamCode, strength: 'EV', scorer: g.scorerName, assists: g.assists.join(', '), notes: g.flag || '' })
+    });
+  }
+
+  await loadGames();
+  renderLogTab();
+  await populatePlayerGameSelect();
+  document.getElementById('p_gameSelect').value = gid;
+  await renderStatsTableForSelectedGame();
+  await populateGoalsGameSelect();
+
+  alert(`Created the game vs ${newGame.opponent} with ${teams[ottTeamName].skaters.length} skaters and ${goalsRaw.length} goal(s) logged. Please double-check the date, venue, and result on the Game Log tab, and adjust any PP/SH/EN goals in the Goals Log (they default to Even Strength).`);
+});
+
 document.getElementById('p_parseBtn').addEventListener('click', () => {
   const text = document.getElementById('p_pasteArea').value;
   if (!text.trim()) { alert('Paste some gamesheet text first.'); return; }

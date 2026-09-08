@@ -246,7 +246,12 @@
 
   <div class="paste-box">
     <label>Paste OHL Gamesheet Text (copy the full box score section, including the "Skaters" and "Goalies" headers)</label>
-    <textarea id="p_pasteArea" placeholder="Paste the gamesheet text here, then click Parse..."></textarea>
+    <textarea id="p_pasteArea" placeholder="Paste the gamesheet text here, then click a button below..."></textarea>
+    <div class="btn-row">
+      <button class="primary" id="p_importNewGameBtn">📋 Import as New Game (creates game + stats + goals in one step)</button>
+    </div>
+    <div class="hint">Recommended for a game that isn't in your log yet. This reads the score header, date, opponent, and venue directly from the gamesheet and creates the whole game entry automatically — no need to fill out the Add Game form first.</div>
+    <div class="hint" style="margin-top:14px;"><strong>Or, for a game already in your log:</strong> use the controls below to parse into the table for manual review, or apply to a game you've selected above.</div>
     <div class="team-import-row">
       <button class="primary" id="p_parseBtn">Parse Pasted Gamesheet</button>
       <button class="ghost" id="p_addRowBtn">+ Add Blank Skater Row</button>
