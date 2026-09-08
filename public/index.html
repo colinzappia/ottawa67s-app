@@ -175,12 +175,14 @@
 
   <div class="paste-box">
     <h2 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:var(--sub);margin:0 0 12px 0;">Import from Gamesheet</h2>
-    <label>Paste OHL Gamesheet Text (copy the full box score section, including the "Skaters" and "Goalies" headers)</label>
-    <textarea id="p_pasteArea" placeholder="Paste the gamesheet text here, then click the button below..."></textarea>
+    <label>Paste Box-Score Gamesheet Text (copy the full box score section, including the "Skaters" and "Goalies" headers)</label>
+    <textarea id="p_pasteArea" placeholder="Paste the box-score gamesheet text here..."></textarea>
+    <label style="margin-top:10px;">Paste Official Game Report Text (optional — adds power play/shorthanded tags, on-ice players, attendance, and game times)</label>
+    <textarea id="p_pasteAreaReport" placeholder="Paste the official report text here, if you have it..."></textarea>
     <div class="btn-row">
       <button class="primary" id="p_importNewGameBtn">📋 Import as New Game (creates game + stats + goals in one step)</button>
     </div>
-    <div class="hint">This reads the score header, date, opponent, and venue directly from the gamesheet and creates the whole game entry automatically, saves all skater/goalie stats to the Player Stats tab, and logs every goal — including power play and shorthanded goals, worked out by cross-referencing each goal's time against the penalty log. Empty-net and penalty-shot goals aren't auto-detected; tag those manually in the Goals Log if any occurred.</div>
+    <div class="hint">Paste either one on its own, or both together for the fullest picture: the box score supplies skater/goalie stats and faceoffs, and the official report (if pasted) supplies power play/shorthanded tags per goal, which players were on the ice, attendance, and start/end times. Empty-net and penalty-shot goals still aren't auto-detected — tag those manually in the Goals Log if any occurred.</div>
   </div>
 
   <div class="games-header"><h2>Or Add / Edit a Game Manually</h2></div>
