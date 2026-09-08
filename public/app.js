@@ -329,6 +329,8 @@ function parseShotsAndSpecialTeams(lines) {
 
 function parseGoalsEvents(lines) {
   const goals = [];
+  const FLAG_KEYWORDS = ['GAME WINNING', 'INSURANCE GOAL', 'SHORT HANDED', 'SHORTHANDED', 'POWER PLAY', 'EMPTY NET', 'PENALTY SHOT'];
+  const STRENGTH_FLAGS = ['SHORT HANDED', 'SHORTHANDED', 'POWER PLAY', 'EMPTY NET', 'PENALTY SHOT'];
   for (let i = 0; i < lines.length; i++) {
     if (lines[i] === 'Goal') {
       const scoreLine = lines[i + 1] || '';
@@ -337,17 +339,29 @@ function parseGoalsEvents(lines) {
       if (m) {
         const scorerName = m[2].trim();
         let rest = (m[3] || '').trim();
-        let flag = '';
-        ['GAME WINNING', 'INSURANCE GOAL'].forEach(f => {
-          if (rest.toUpperCase().endsWith(f)) { flag = f; rest = rest.slice(0, rest.length - f.length); }
-        });
+        // Multiple flags can be concatenated with no separator (e.g. "...McCallumPOWER PLAYGAME WINNING"),
+        // so keep stripping recognized flags off the end until none remain.
+        const foundFlags = [];
+        let changed = true;
+        while (changed) {
+          changed = false;
+          for (const f of FLAG_KEYWORDS) {
+            if (rest.toUpperCase().endsWith(f)) { foundFlags.unshift(f); rest = rest.slice(0, rest.length - f.length); changed = true; break; }
+          }
+        }
+        let strengthHint = null;
+        if (foundFlags.some(f => /SHORT ?HANDED/.test(f))) strengthHint = 'SH';
+        else if (foundFlags.includes('POWER PLAY')) strengthHint = 'PP';
+        else if (foundFlags.includes('EMPTY NET')) strengthHint = 'EN';
+        else if (foundFlags.includes('PENALTY SHOT')) strengthHint = 'PS';
+        const flag = foundFlags.filter(f => !STRENGTH_FLAGS.includes(f)).join(' ');
         let assists = [];
         const am = rest.match(/Assists:\s*(.*)/i);
         if (am) { assists = am[1].split(',').map(s => s.trim().replace(/^#\d+\s*/, '')).filter(Boolean); }
         const tm = timeLine.match(/^(\S+)\s+(.+)$/);
         const period = tm ? tm[1] : '';
         const time = tm ? tm[2] : '';
-        goals.push({ scorerName, assists, period, time, flag });
+        goals.push({ scorerName, assists, period, time, flag, strengthHint });
       }
     }
   }
@@ -816,6 +830,8 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
         if (plusNames.length || minusNames.length) {
           onIceNote = `On ice for: ${plusNames.join(', ')}. On ice against: ${minusNames.join(', ')}.`;
         }
+      } else if (g.strengthHint) {
+        strength = g.strengthHint;
       } else {
         const absTime = periodToAbsoluteSeconds(g.period, parseTimeToSeconds(g.time));
         strength = determineGoalStrength(absTime, teamName, penalties);
