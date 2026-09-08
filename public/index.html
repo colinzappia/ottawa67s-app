@@ -173,6 +173,17 @@
   <div class="agg-grid" id="aggGrid"></div>
   <div class="agg-grid2" id="aggGrid2"></div>
 
+  <div class="paste-box">
+    <h2 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:var(--sub);margin:0 0 12px 0;">Import from Gamesheet</h2>
+    <label>Paste OHL Gamesheet Text (copy the full box score section, including the "Skaters" and "Goalies" headers)</label>
+    <textarea id="p_pasteArea" placeholder="Paste the gamesheet text here, then click the button below..."></textarea>
+    <div class="btn-row">
+      <button class="primary" id="p_importNewGameBtn">📋 Import as New Game (creates game + stats + goals in one step)</button>
+    </div>
+    <div class="hint">This reads the score header, date, opponent, and venue directly from the gamesheet and creates the whole game entry automatically, saves all skater/goalie stats to the Player Stats tab, and logs every goal — no manual form-filling needed.</div>
+  </div>
+
+  <div class="games-header"><h2>Or Add / Edit a Game Manually</h2></div>
   <form class="panel-form" id="gameForm">
     <h2>Add Game Summary</h2>
     <div class="form-grid">
@@ -243,34 +254,16 @@
     <div><label>Select Game</label><select id="p_gameSelect"></select></div>
     <div style="flex:0;"><button class="ghost" id="p_refreshGames">Refresh List</button></div>
   </div>
-
-  <div class="paste-box">
-    <label>Paste OHL Gamesheet Text (copy the full box score section, including the "Skaters" and "Goalies" headers)</label>
-    <textarea id="p_pasteArea" placeholder="Paste the gamesheet text here, then click a button below..."></textarea>
-    <div class="btn-row">
-      <button class="primary" id="p_importNewGameBtn">📋 Import as New Game (creates game + stats + goals in one step)</button>
-    </div>
-    <div class="hint">Recommended for a game that isn't in your log yet. This reads the score header, date, opponent, and venue directly from the gamesheet and creates the whole game entry automatically — no need to fill out the Add Game form first.</div>
-    <div class="hint" style="margin-top:14px;"><strong>Or, for a game already in your log:</strong> use the controls below to parse into the table for manual review, or apply to a game you've selected above.</div>
-    <div class="team-import-row">
-      <button class="primary" id="p_parseBtn">Parse Pasted Gamesheet</button>
-      <button class="ghost" id="p_addRowBtn">+ Add Blank Skater Row</button>
-      <select id="p_teamPick" style="width:auto;display:none;"></select>
-      <button class="ghost" id="p_loadTeamBtn" style="display:none;">Load This Team Into Table</button>
-    </div>
-    <div class="hint">Parsing looks for the standard OHL gamesheet layout. Always check the table below and correct anything before saving.</div>
-    <div id="p_summaryPreview" class="hint" style="display:none;margin-top:10px;font-weight:600;"></div>
-    <div class="btn-row" id="p_applyRow" style="display:none;">
-      <button class="primary" id="p_applyToGameBtn">Apply Team Stats + Goals to Selected Game</button>
-    </div>
-    <div class="hint" id="p_applyHint" style="display:none;">This fills Shots For/Against, PP Goals/Opportunities, and PK Goals Allowed/Times Shorthanded on the Game Log entry, and adds each goal to the Goals Log. Goal strength defaults to Even Strength since the gamesheet text doesn't tag it — adjust any PP/SH/EN goals afterward in the Goals Log tab.</div>
-  </div>
+  <div class="hint">Stats for a game get filled in automatically when you import its gamesheet from the Game Log tab. You can also add or correct rows manually below.</div>
 
   <h3 class="subhead">Skaters</h3>
   <table class="stats-table" id="p_statsTable">
     <thead><tr><th>Player</th><th>Pos</th><th>#</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>SOG</th><th>PIM</th><th>FOW</th><th>FOL</th><th>FO%</th><th></th></tr></thead>
     <tbody id="p_statsBody"></tbody>
   </table>
+  <div class="btn-row" style="margin-bottom:10px;">
+    <button class="ghost small" id="p_addRowBtn">+ Add Blank Skater Row</button>
+  </div>
 
   <h3 class="subhead">Goalies</h3>
   <table class="stats-table" id="p_goalieTable">

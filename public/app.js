@@ -373,17 +373,6 @@ function buildTeamIndex(teamsObj) {
   return idx;
 }
 
-function renderParsedSummaryPreview(teamNames) {
-  const s = lastParsedSummary;
-  const parts = teamNames.map((t, i) =>
-    `${t} — Shots: ${s.shots[i] !== undefined ? s.shots[i] : '?'}, PP: ${s.ppFrac[i] || '?'} (FOW ${s.ppFow[i] !== undefined ? s.ppFow[i] : '?'})`
-  );
-  const el = document.getElementById('p_summaryPreview');
-  el.textContent = 'Parsed — ' + parts.join(' | ') + ` | Goals found: ${lastParsedGoals.length}`;
-  el.style.display = 'block';
-  document.getElementById('p_applyRow').style.display = 'flex';
-  document.getElementById('p_applyHint').style.display = 'block';
-}
 function minToSeconds(m) {
   if (!m) return 0;
   const parts = m.split(':').map(Number);
@@ -607,72 +596,6 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
   alert(`Created the game vs ${newGame.opponent} with ${teams[ottTeamName].skaters.length} skaters and ${goalsRaw.length} goal(s) logged. Please double-check the date, venue, and result on the Game Log tab, and adjust any PP/SH/EN goals in the Goals Log (they default to Even Strength).`);
 });
 
-document.getElementById('p_parseBtn').addEventListener('click', () => {
-  const text = document.getElementById('p_pasteArea').value;
-  if (!text.trim()) { alert('Paste some gamesheet text first.'); return; }
-  const teams = parseGamesheetText(text);
-  const teamNames = Object.keys(teams);
-  if (teamNames.length === 0) { alert('Couldn\'t find any recognizable team sections. Make sure you included the "Skaters" and "Goalies" headers from the gamesheet.'); return; }
-  lastParsedTeams = teams;
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-  lastParsedSummary = parseShotsAndSpecialTeams(lines);
-  lastParsedGoals = parseGoalsEvents(lines);
-  const pick = document.getElementById('p_teamPick');
-  pick.innerHTML = teamNames.map(t => `<option value="${t}">${t} (${teams[t].skaters.length} skaters)</option>`).join('');
-  const preferred = teamNames.find(t => /67/.test(t));
-  if (preferred) pick.value = preferred;
-  pick.style.display = 'inline-block';
-  document.getElementById('p_loadTeamBtn').style.display = 'inline-block';
-  renderParsedSummaryPreview(teamNames);
-});
-document.getElementById('p_applyToGameBtn').addEventListener('click', async () => {
-  const gid = currentPlayerGameId();
-  if (!gid) { alert('Select a game first.'); return; }
-  const game = games.find(g => g.id === gid);
-  if (!game) { alert('Could not find the selected game.'); return; }
-  const teamNames = Object.keys(lastParsedTeams);
-  if (teamNames.length < 2) { alert('Need two parsed teams (both Skaters sections) to apply stats.'); return; }
-  const ottIdx = teamNames.findIndex(t => /67/.test(t));
-  if (ottIdx === -1) { alert('Could not identify which parsed team is the 67\'s (its name should contain "67"). Apply cancelled.'); return; }
-  const oppIdx = ottIdx === 0 ? 1 : 0;
-
-  const shots = lastParsedSummary.shots;
-  const ppFrac = lastParsedSummary.ppFrac;
-  const updated = { ...game };
-  if (shots[ottIdx] !== undefined) updated.sf = shots[ottIdx];
-  if (shots[oppIdx] !== undefined) updated.sa = shots[oppIdx];
-  if (ppFrac[ottIdx]) { const [g_, o_] = ppFrac[ottIdx].split('/').map(n => parseInt(n) || 0); updated.ppg = g_; updated.ppo = o_; }
-  if (ppFrac[oppIdx]) { const [g_, o_] = ppFrac[oppIdx].split('/').map(n => parseInt(n) || 0); updated.pk_ga = g_; updated.pk_against = o_; }
-
-  if (!confirm(`This will update Shots/PP/PK fields for this game and add ${lastParsedGoals.length} goal(s) to the Goals Log. Continue?`)) return;
-
-  await api('/api/games/' + gid, { method: 'PUT', body: JSON.stringify(updated) });
-
-  const idx = buildTeamIndex(lastParsedTeams);
-  const ottTeamName = teamNames[ottIdx];
-  for (const g of lastParsedGoals) {
-    const teamName = idx[normalizeName(g.scorerName)];
-    const teamCode = teamName === ottTeamName ? 'OTT' : 'OPP';
-    await api('/api/goals/' + gid, {
-      method: 'POST',
-      body: JSON.stringify({
-        period: g.period, time: g.time, team: teamCode, strength: 'EV',
-        scorer: g.scorerName, assists: g.assists.join(', '), notes: g.flag || ''
-      })
-    });
-  }
-
-  await loadGames();
-  renderLogTab();
-  alert(`Applied team stats and ${lastParsedGoals.length} goal(s). Switch to the Goals Log tab and select this game to review — adjust any PP/SH/EN goals from the default Even Strength.`);
-});
-document.getElementById('p_loadTeamBtn').addEventListener('click', () => {
-  const teamName = document.getElementById('p_teamPick').value;
-  const data = lastParsedTeams[teamName];
-  if (!data) return;
-  renderSkaterRows(data.skaters);
-  renderGoalieRows(data.goalies);
-});
 document.getElementById('p_saveGameStats').addEventListener('click', async () => {
   const gid = currentPlayerGameId();
   if (!gid) { alert('Select or add a game first (in the Game Log tab).'); return; }
