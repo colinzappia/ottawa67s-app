@@ -254,6 +254,11 @@
       <button class="ghost" id="p_loadTeamBtn" style="display:none;">Load This Team Into Table</button>
     </div>
     <div class="hint">Parsing looks for the standard OHL gamesheet layout. Always check the table below and correct anything before saving.</div>
+    <div id="p_summaryPreview" class="hint" style="display:none;margin-top:10px;font-weight:600;"></div>
+    <div class="btn-row" id="p_applyRow" style="display:none;">
+      <button class="primary" id="p_applyToGameBtn">Apply Team Stats + Goals to Selected Game</button>
+    </div>
+    <div class="hint" id="p_applyHint" style="display:none;">This fills Shots For/Against, PP Goals/Opportunities, and PK Goals Allowed/Times Shorthanded on the Game Log entry, and adds each goal to the Goals Log. Goal strength defaults to Even Strength since the gamesheet text doesn't tag it — adjust any PP/SH/EN goals afterward in the Goals Log tab.</div>
   </div>
 
   <h3 class="subhead">Skaters</h3>

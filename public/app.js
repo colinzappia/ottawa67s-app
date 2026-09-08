@@ -3,6 +3,8 @@ const API = '';
 let games = [];
 let editingId = null;
 let lastParsedTeams = {};
+let lastParsedSummary = { shots: [], ppFrac: [], ppFow: [] };
+let lastParsedGoals = [];
 
 async function api(path, opts) {
   const res = await fetch(API + path, {
@@ -300,7 +302,88 @@ function parseGamesheetText(text) {
   return teams;
 }
 
-/* ===================== PLAYER STATS TAB ===================== */
+function parseShotsAndSpecialTeams(lines) {
+  const result = { shots: [], ppFrac: [], ppFow: [] };
+  for (let i = 0; i < lines.length; i++) {
+    if (/^Shots on Goal$/i.test(lines[i])) {
+      const row1 = (lines[i + 2] || '').split(/\t+|\s{2,}/).filter(Boolean);
+      const row2 = (lines[i + 3] || '').split(/\t+|\s{2,}/).filter(Boolean);
+      [row1, row2].forEach(tokens => {
+        if (tokens.length >= 2) {
+          const total = parseInt(tokens[tokens.length - 1]);
+          if (!isNaN(total)) result.shots.push(total);
+        }
+      });
+    }
+    const headTokens = lines[i].split(/\s+/).filter(Boolean);
+    if (headTokens.length === 2 && /^PP$/i.test(headTokens[0]) && /^FOW$/i.test(headTokens[1])) {
+      const row1 = (lines[i + 1] || '').split(/\t+|\s+/).filter(Boolean);
+      const row2 = (lines[i + 2] || '').split(/\t+|\s+/).filter(Boolean);
+      [row1, row2].forEach(tokens => {
+        if (tokens.length >= 2) { result.ppFrac.push(tokens[0]); result.ppFow.push(parseInt(tokens[1]) || 0); }
+      });
+    }
+  }
+  return result;
+}
+
+function parseGoalsEvents(lines) {
+  const goals = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i] === 'Goal') {
+      const scoreLine = lines[i + 1] || '';
+      const timeLine = lines[i + 2] || '';
+      const m = scoreLine.match(/^#(\d+)\s+(.+?)\s+\(\d+\)\s+scores\.(.*)$/i);
+      if (m) {
+        const scorerName = m[2].trim();
+        let rest = (m[3] || '').trim();
+        let flag = '';
+        ['GAME WINNING', 'INSURANCE GOAL'].forEach(f => {
+          if (rest.toUpperCase().endsWith(f)) { flag = f; rest = rest.slice(0, rest.length - f.length); }
+        });
+        let assists = [];
+        const am = rest.match(/Assists:\s*(.*)/i);
+        if (am) { assists = am[1].split(',').map(s => s.trim().replace(/^#\d+\s*/, '')).filter(Boolean); }
+        const tm = timeLine.match(/^(\S+)\s+(.+)$/);
+        const period = tm ? tm[1] : '';
+        const time = tm ? tm[2] : '';
+        goals.push({ scorerName, assists, period, time, flag });
+      }
+    }
+  }
+  return goals;
+}
+
+function normalizeName(n) {
+  n = (n || '').trim();
+  if (n.includes(',')) {
+    const parts = n.split(',');
+    const last = parts[0].trim();
+    const first = (parts[1] || '').trim();
+    return (first + ' ' + last).toLowerCase().replace(/\s+/g, ' ');
+  }
+  return n.toLowerCase().replace(/\s+/g, ' ');
+}
+
+function buildTeamIndex(teamsObj) {
+  const idx = {};
+  Object.keys(teamsObj).forEach(teamName => {
+    (teamsObj[teamName].skaters || []).forEach(s => { idx[normalizeName(s.name)] = teamName; });
+  });
+  return idx;
+}
+
+function renderParsedSummaryPreview(teamNames) {
+  const s = lastParsedSummary;
+  const parts = teamNames.map((t, i) =>
+    `${t} — Shots: ${s.shots[i] !== undefined ? s.shots[i] : '?'}, PP: ${s.ppFrac[i] || '?'} (FOW ${s.ppFow[i] !== undefined ? s.ppFow[i] : '?'})`
+  );
+  const el = document.getElementById('p_summaryPreview');
+  el.textContent = 'Parsed — ' + parts.join(' | ') + ` | Goals found: ${lastParsedGoals.length}`;
+  el.style.display = 'block';
+  document.getElementById('p_applyRow').style.display = 'flex';
+  document.getElementById('p_applyHint').style.display = 'block';
+}
 async function populatePlayerGameSelect() {
   const sel = document.getElementById('p_gameSelect');
   const sorted = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -414,12 +497,57 @@ document.getElementById('p_parseBtn').addEventListener('click', () => {
   const teamNames = Object.keys(teams);
   if (teamNames.length === 0) { alert('Couldn\'t find any recognizable team sections. Make sure you included the "Skaters" and "Goalies" headers from the gamesheet.'); return; }
   lastParsedTeams = teams;
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  lastParsedSummary = parseShotsAndSpecialTeams(lines);
+  lastParsedGoals = parseGoalsEvents(lines);
   const pick = document.getElementById('p_teamPick');
   pick.innerHTML = teamNames.map(t => `<option value="${t}">${t} (${teams[t].skaters.length} skaters)</option>`).join('');
   const preferred = teamNames.find(t => /67/.test(t));
   if (preferred) pick.value = preferred;
   pick.style.display = 'inline-block';
   document.getElementById('p_loadTeamBtn').style.display = 'inline-block';
+  renderParsedSummaryPreview(teamNames);
+});
+document.getElementById('p_applyToGameBtn').addEventListener('click', async () => {
+  const gid = currentPlayerGameId();
+  if (!gid) { alert('Select a game first.'); return; }
+  const game = games.find(g => g.id === gid);
+  if (!game) { alert('Could not find the selected game.'); return; }
+  const teamNames = Object.keys(lastParsedTeams);
+  if (teamNames.length < 2) { alert('Need two parsed teams (both Skaters sections) to apply stats.'); return; }
+  const ottIdx = teamNames.findIndex(t => /67/.test(t));
+  if (ottIdx === -1) { alert('Could not identify which parsed team is the 67\'s (its name should contain "67"). Apply cancelled.'); return; }
+  const oppIdx = ottIdx === 0 ? 1 : 0;
+
+  const shots = lastParsedSummary.shots;
+  const ppFrac = lastParsedSummary.ppFrac;
+  const updated = { ...game };
+  if (shots[ottIdx] !== undefined) updated.sf = shots[ottIdx];
+  if (shots[oppIdx] !== undefined) updated.sa = shots[oppIdx];
+  if (ppFrac[ottIdx]) { const [g_, o_] = ppFrac[ottIdx].split('/').map(n => parseInt(n) || 0); updated.ppg = g_; updated.ppo = o_; }
+  if (ppFrac[oppIdx]) { const [g_, o_] = ppFrac[oppIdx].split('/').map(n => parseInt(n) || 0); updated.pk_ga = g_; updated.pk_against = o_; }
+
+  if (!confirm(`This will update Shots/PP/PK fields for this game and add ${lastParsedGoals.length} goal(s) to the Goals Log. Continue?`)) return;
+
+  await api('/api/games/' + gid, { method: 'PUT', body: JSON.stringify(updated) });
+
+  const idx = buildTeamIndex(lastParsedTeams);
+  const ottTeamName = teamNames[ottIdx];
+  for (const g of lastParsedGoals) {
+    const teamName = idx[normalizeName(g.scorerName)];
+    const teamCode = teamName === ottTeamName ? 'OTT' : 'OPP';
+    await api('/api/goals/' + gid, {
+      method: 'POST',
+      body: JSON.stringify({
+        period: g.period, time: g.time, team: teamCode, strength: 'EV',
+        scorer: g.scorerName, assists: g.assists.join(', '), notes: g.flag || ''
+      })
+    });
+  }
+
+  await loadGames();
+  renderLogTab();
+  alert(`Applied team stats and ${lastParsedGoals.length} goal(s). Switch to the Goals Log tab and select this game to review — adjust any PP/SH/EN goals from the default Even Strength.`);
 });
 document.getElementById('p_loadTeamBtn').addEventListener('click', () => {
   const teamName = document.getElementById('p_teamPick').value;
