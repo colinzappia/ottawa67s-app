@@ -373,6 +373,61 @@ function buildTeamIndex(teamsObj) {
   return idx;
 }
 
+function parseTimeToSeconds(t) {
+  const parts = (t || '0:00').split(':').map(Number);
+  return (parts[0] || 0) * 60 + (parts[1] || 0);
+}
+const PERIOD_LENGTH_SECONDS = 1200; // 20-minute regulation period
+function periodToAbsoluteSeconds(periodLabel, elapsedSeconds) {
+  const map = { '1st': 0, '2nd': 1, '3rd': 2 };
+  if (map[periodLabel] !== undefined) return map[periodLabel] * PERIOD_LENGTH_SECONDS + elapsedSeconds;
+  if (/^OT/i.test(periodLabel)) return 3 * PERIOD_LENGTH_SECONDS + elapsedSeconds;
+  return 99999 + elapsedSeconds; // SO or unrecognized — keep far away so it never overlaps a real penalty window
+}
+
+// Cross-references each penalty's player against the parsed rosters to determine which team
+// took the penalty — more reliable than the short team-code tags in the gamesheet text.
+function parsePenalties(lines, teams) {
+  const idx = buildTeamIndex(teams);
+  const allPlayers = Object.keys(idx).sort((a, b) => b.length - a.length);
+  const penalties = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/^Penalty#(\d+)(.+)$/i);
+    if (m) {
+      const rest = m[2];
+      const restLower = rest.toLowerCase();
+      let matchedPlayerNorm = null;
+      for (const p of allPlayers) { if (restLower.startsWith(p)) { matchedPlayerNorm = p; break; } }
+      const teamName = matchedPlayerNorm ? idx[matchedPlayerNorm] : null;
+      const timeLine = lines[i + 1] || '';
+      const tm = timeLine.match(/^(\S+)\s+(\d+):(\d+)$/);
+      const durMatch = rest.match(/(\d+):(\d+)/);
+      let durationSeconds = durMatch ? (parseInt(durMatch[1]) * 60 + parseInt(durMatch[2])) : 120;
+      if (tm && teamName) {
+        penalties.push({ teamName, period: tm[1], elapsedSeconds: parseInt(tm[2]) * 60 + parseInt(tm[3]), durationSeconds });
+      }
+    }
+  }
+  return penalties;
+}
+
+// Determines EV / PP / SH for a goal by checking which team(s), if any, had an active
+// penalty at that moment. Simultaneous penalties on both sides (4-on-4) count as EV.
+function determineGoalStrength(goalAbsTime, scoringTeamName, penalties) {
+  let scoringHasPenalty = false, opponentHasPenalty = false;
+  penalties.forEach(p => {
+    const start = periodToAbsoluteSeconds(p.period, p.elapsedSeconds);
+    const end = start + p.durationSeconds;
+    if (goalAbsTime >= start && goalAbsTime < end) {
+      if (p.teamName === scoringTeamName) scoringHasPenalty = true;
+      else opponentHasPenalty = true;
+    }
+  });
+  if (scoringHasPenalty && !opponentHasPenalty) return 'SH';
+  if (opponentHasPenalty && !scoringHasPenalty) return 'PP';
+  return 'EV';
+}
+
 function minToSeconds(m) {
   if (!m) return 0;
   const parts = m.split(':').map(Number);
@@ -577,12 +632,18 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
 
   const idx = buildTeamIndex(teams);
   const ottTeamName = teamNames[ottIdx];
+  const penalties = parsePenalties(lines, teams);
+  let ppCount = 0, shCount = 0;
   for (const g of goalsRaw) {
     const teamName = idx[normalizeName(g.scorerName)];
     const teamCode = teamName === ottTeamName ? 'OTT' : 'OPP';
+    const absTime = periodToAbsoluteSeconds(g.period, parseTimeToSeconds(g.time));
+    const strength = determineGoalStrength(absTime, teamName, penalties);
+    if (strength === 'PP') ppCount++;
+    if (strength === 'SH') shCount++;
     await api('/api/goals/' + gid, {
       method: 'POST',
-      body: JSON.stringify({ period: g.period, time: g.time, team: teamCode, strength: 'EV', scorer: g.scorerName, assists: g.assists.join(', '), notes: g.flag || '' })
+      body: JSON.stringify({ period: g.period, time: g.time, team: teamCode, strength, scorer: g.scorerName, assists: g.assists.join(', '), notes: g.flag || '' })
     });
   }
 
@@ -593,7 +654,7 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
   await renderStatsTableForSelectedGame();
   await populateGoalsGameSelect();
 
-  alert(`Created the game vs ${newGame.opponent} with ${teams[ottTeamName].skaters.length} skaters and ${goalsRaw.length} goal(s) logged. Please double-check the date, venue, and result on the Game Log tab, and adjust any PP/SH/EN goals in the Goals Log (they default to Even Strength).`);
+  alert(`Created the game vs ${newGame.opponent} with ${teams[ottTeamName].skaters.length} skaters and ${goalsRaw.length} goal(s) logged (${ppCount} power play, ${shCount} shorthanded, inferred from penalty times). Please double-check the date, venue, and result on the Game Log tab. Empty-net and penalty-shot goals aren't auto-detected — tag those manually in the Goals Log if any occurred.`);
 });
 
 document.getElementById('p_saveGameStats').addEventListener('click', async () => {
