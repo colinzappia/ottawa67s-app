@@ -18,6 +18,7 @@
   <button class="tab-btn" data-tab="log">Game Log &amp; Aggregates</button>
   <button class="tab-btn" data-tab="players">Player Stats</button>
   <button class="tab-btn" data-tab="goals">Goals Log</button>
+  <button class="tab-btn" data-tab="trends">Trends &amp; Streaks</button>
 </div>
 
 <!-- ============ TAB 1: SPOTTING BOARD ============ -->
@@ -331,6 +332,35 @@
 
   <div class="games-header"><h2>Season Strength Breakdown (from logged goals)</h2></div>
   <div class="agg-grid" id="g_seasonAgg"></div>
+</div>
+
+<!-- ============ TAB 5: TRENDS & STREAKS ============ -->
+<div class="tab-panel" id="panel-trends">
+  <div class="btn-row" style="align-items:center;margin-bottom:16px;">
+    <label style="margin:0;">Game Type:</label>
+    <select id="t_typeFilter" style="width:auto;">
+      <option value="Regular Season" selected>Regular Season</option>
+      <option value="Preseason">Preseason</option>
+      <option value="Playoffs">Playoffs</option>
+      <option value="All">All Games</option>
+    </select>
+    <button class="ghost" id="t_refreshBtn">Refresh</button>
+  </div>
+
+  <h3 class="subhead" style="margin-top:0;">Last 5 Games</h3>
+  <div class="agg-grid" id="t_last5"></div>
+
+  <h3 class="subhead">Last 10 Games</h3>
+  <div class="agg-grid" id="t_last10"></div>
+
+  <div class="games-header"><h2>Player Streaks</h2></div>
+  <div class="hint" style="margin-bottom:10px;">A streak is broken by any game with 0 points (or 0 goals) — games where a player didn't dress aren't counted either way. "Current" reflects their most recent game in the selected game type.</div>
+  <div class="season-table-wrap">
+    <table class="stats-table" id="t_streaksTable">
+      <thead><tr><th>Player</th><th>GP</th><th>Current Point Streak</th><th>Longest Point Streak</th><th>Current Goal Streak</th><th>Longest Goal Streak</th></tr></thead>
+      <tbody id="t_streaksBody"></tbody>
+    </table>
+  </div>
 </div>
 
 <script src="app.js"></script>

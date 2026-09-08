@@ -24,6 +24,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'players') { populatePlayerGameSelect(); renderSeasonPlayerTotals(); }
     if (btn.dataset.tab === 'goals') { populateGoalsGameSelect(); renderSeasonGoalsBreakdown(); }
+    if (btn.dataset.tab === 'trends') { renderTrendsTab(); }
   });
 });
 
@@ -102,8 +103,7 @@ function filteredGames() {
   if (filter === 'All') return games;
   return games.filter(g => (g.gametype || 'Regular Season') === filter);
 }
-function computeAggregates() {
-  const list = filteredGames();
+function computeAggregatesForGames(list) {
   const agg = { gp: list.length, w: 0, l: 0, otl: 0, pts: 0, gf: 0, ga: 0, sf: 0, sa: 0,
     ppg: 0, ppo: 0, pk_against: 0, pk_ga: 0, shgf: 0, shga: 0, engf: 0, enga: 0,
     sogf: 0, soga: 0, psgf: 0, psga: 0 };
@@ -121,6 +121,9 @@ function computeAggregates() {
     agg.psgf += Number(g.psgf) || 0; agg.psga += Number(g.psga) || 0;
   });
   return agg;
+}
+function computeAggregates() {
+  return computeAggregatesForGames(filteredGames());
 }
 function renderAggregates() {
   const a = computeAggregates();
@@ -598,6 +601,100 @@ function normalizeGoalTime(t) {
   const sec = (parts[1] || '0').padStart(2, '0');
   return m + ':' + sec;
 }
+
+function compactAggCardsHTML(a) {
+  const ppPct = a.ppo > 0 ? ((a.ppg / a.ppo) * 100).toFixed(1) + '%' : '—';
+  const pkPct = a.pk_against > 0 ? (((a.pk_against - a.pk_ga) / a.pk_against) * 100).toFixed(1) + '%' : '—';
+  const diff = a.gf - a.ga; const diffStr = (diff > 0 ? '+' : '') + diff;
+  return `
+    <div class="agg-card"><div class="val">${a.gp}</div><div class="lbl">Games</div></div>
+    <div class="agg-card"><div class="val">${a.w}-${a.l}-${a.otl}</div><div class="lbl">Record</div></div>
+    <div class="agg-card"><div class="val">${a.pts}</div><div class="lbl">Points</div></div>
+    <div class="agg-card"><div class="val">${a.gf}</div><div class="lbl">Goals For</div></div>
+    <div class="agg-card"><div class="val">${a.ga}</div><div class="lbl">Goals Against</div></div>
+    <div class="agg-card"><div class="val">${diffStr}</div><div class="lbl">Goal Diff</div></div>
+    <div class="agg-card"><div class="val">${ppPct}</div><div class="lbl">Power Play %</div></div>
+    <div class="agg-card"><div class="val">${pkPct}</div><div class="lbl">Penalty Kill %</div></div>`;
+}
+
+function trendsFilteredGames() {
+  const filter = document.getElementById('t_typeFilter').value;
+  const list = filter === 'All' ? games : games.filter(g => (g.gametype || 'Regular Season') === filter);
+  // games from the API are already ordered newest-first
+  return [...list].sort((a, b) => new Date(b.date) - new Date(a.date));
+}
+
+function renderTrendGrids() {
+  const sorted = trendsFilteredGames();
+  const last5 = sorted.slice(0, 5);
+  const last10 = sorted.slice(0, 10);
+  document.getElementById('t_last5').innerHTML = last5.length
+    ? compactAggCardsHTML(computeAggregatesForGames(last5)) + `<div class="agg-card"><div class="val">${last5.length}</div><div class="lbl">Games Included</div></div>`
+    : '<div class="empty-state">No games yet for this filter.</div>';
+  document.getElementById('t_last10').innerHTML = last10.length
+    ? compactAggCardsHTML(computeAggregatesForGames(last10)) + `<div class="agg-card"><div class="val">${last10.length}</div><div class="lbl">Games Included</div></div>`
+    : '<div class="empty-state">No games yet for this filter.</div>';
+}
+
+// Computes current/longest point and goal streaks per player from their full chronological game log.
+// A streak breaks on any game with 0 points (or 0 goals) — games the player didn't record any stat
+// row for aren't counted as either a streak game or a break, since we can't tell dressed-but-scoreless
+// apart from didn't-dress from the box score alone.
+function computeStreaksFromLog(rows) {
+  const byPlayer = {};
+  rows.forEach(r => {
+    if (!byPlayer[r.name]) byPlayer[r.name] = [];
+    byPlayer[r.name].push(r);
+  });
+  const results = [];
+  Object.keys(byPlayer).forEach(name => {
+    const gamesForPlayer = byPlayer[name]; // already chronological (ASC) from the API query
+    let longestPoint = 0, longestGoal = 0, runPoint = 0, runGoal = 0;
+    gamesForPlayer.forEach(g => {
+      if (Number(g.points) > 0) { runPoint++; longestPoint = Math.max(longestPoint, runPoint); } else { runPoint = 0; }
+      if (Number(g.goals) > 0) { runGoal++; longestGoal = Math.max(longestGoal, runGoal); } else { runGoal = 0; }
+    });
+    // Current streak = the run ending at the most recent game, walking backward from the end
+    let currentPoint = 0, currentGoal = 0;
+    for (let i = gamesForPlayer.length - 1; i >= 0; i--) {
+      if (Number(gamesForPlayer[i].points) > 0) currentPoint++; else break;
+    }
+    for (let i = gamesForPlayer.length - 1; i >= 0; i--) {
+      if (Number(gamesForPlayer[i].goals) > 0) currentGoal++; else break;
+    }
+    results.push({ name, gp: gamesForPlayer.length, currentPoint, longestPoint, currentGoal, longestGoal });
+  });
+  return results;
+}
+
+async function renderStreaksTable() {
+  const body = document.getElementById('t_streaksBody');
+  body.innerHTML = '<tr><td colspan="6" style="color:var(--sub);">Loading…</td></tr>';
+  let rows;
+  try { rows = await api('/api/skater-game-log'); }
+  catch (e) { body.innerHTML = '<tr><td colspan="6" style="color:var(--sub);">Could not load streak data.</td></tr>'; return; }
+  const filter = document.getElementById('t_typeFilter').value;
+  const filtered = filter === 'All' ? rows : rows.filter(r => (r.gametype || 'Regular Season') === filter);
+  const streaks = computeStreaksFromLog(filtered);
+  if (streaks.length === 0) { body.innerHTML = '<tr><td colspan="6" style="color:var(--sub);">No player stats saved for this filter yet.</td></tr>'; return; }
+  streaks.sort((a, b) => b.currentPoint - a.currentPoint || b.longestPoint - a.longestPoint);
+  body.innerHTML = streaks.map(s => `
+    <tr>
+      <td style="text-align:left;">${s.name}</td>
+      <td>${s.gp}</td>
+      <td>${s.currentPoint}</td>
+      <td>${s.longestPoint}</td>
+      <td>${s.currentGoal}</td>
+      <td>${s.longestGoal}</td>
+    </tr>`).join('');
+}
+
+function renderTrendsTab() {
+  renderTrendGrids();
+  renderStreaksTable();
+}
+document.getElementById('t_typeFilter').addEventListener('change', renderTrendsTab);
+document.getElementById('t_refreshBtn').addEventListener('click', async () => { await loadGames(); renderTrendsTab(); });
 
 async function populatePlayerGameSelect() {
   const sel = document.getElementById('p_gameSelect');

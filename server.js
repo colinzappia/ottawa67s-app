@@ -142,6 +142,17 @@ app.get('/api/player-stats-season', (req, res) => {
   res.json(rows);
 });
 
+// Per-game skater rows joined with game date/type, ordered chronologically — used for streak calculations
+app.get('/api/skater-game-log', (req, res) => {
+  const rows = db.prepare(`
+    SELECT s.name, s.goals, s.assists, s.points, g.id as game_id, g.date as game_date, g.gametype, g.opponent
+    FROM skater_stats s
+    JOIN games g ON s.game_id = g.id
+    ORDER BY g.date ASC, g.id ASC
+  `).all();
+  res.json(rows);
+});
+
 /* ============== GOALS LOG ============== */
 
 app.get('/api/goals/:gameId', (req, res) => {
