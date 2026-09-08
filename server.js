@@ -103,14 +103,16 @@ app.put('/api/player-stats/:gameId', (req, res) => {
     });
 
     const insGoalie = db.prepare(`
-      INSERT INTO goalie_stats (game_id, name, ga, min, shots, saves, pim)
-      VALUES (@game_id, @name, @ga, @min, @shots, @saves, @pim)
+      INSERT INTO goalie_stats (game_id, name, ga, min, shots, saves, pim, on_seconds, off_seconds)
+      VALUES (@game_id, @name, @ga, @min, @shots, @saves, @pim, @on_seconds, @off_seconds)
     `);
     goalies.forEach(gk => {
       if (!gk.name || !gk.name.trim()) return;
       insGoalie.run({
         game_id: gameId, name: gk.name, ga: Number(gk.ga) || 0, min: gk.min || '',
-        shots: Number(gk.shots) || 0, saves: Number(gk.saves) || 0, pim: Number(gk.pim) || 0
+        shots: Number(gk.shots) || 0, saves: Number(gk.saves) || 0, pim: Number(gk.pim) || 0,
+        on_seconds: (gk.on_seconds === undefined || gk.on_seconds === null) ? null : Number(gk.on_seconds),
+        off_seconds: (gk.off_seconds === undefined || gk.off_seconds === null) ? null : Number(gk.off_seconds)
       });
     });
   });
@@ -164,6 +166,26 @@ app.get('/api/goalie-game-log', (req, res) => {
   res.json(rows);
 });
 
+// Per-goalie ice-time windows (when known) plus the opponent goals attributed to a specific
+// goalie (also only when known) — used to compute time-based scoreless streaks.
+app.get('/api/goalie-ice-time-log', (req, res) => {
+  const segments = db.prepare(`
+    SELECT gs.name, gs.on_seconds, gs.off_seconds, g.id as game_id, g.date as game_date, g.gametype
+    FROM goalie_stats gs
+    JOIN games g ON gs.game_id = g.id
+    WHERE gs.on_seconds IS NOT NULL AND gs.off_seconds IS NOT NULL
+    ORDER BY g.date ASC, g.id ASC
+  `).all();
+  const attributedGoals = db.prepare(`
+    SELECT go.goalie as name, go.period, go.time, g.id as game_id, g.date as game_date, g.gametype
+    FROM goals go
+    JOIN games g ON go.game_id = g.id
+    WHERE go.team = 'OPP' AND go.goalie IS NOT NULL AND go.goalie != ''
+    ORDER BY g.date ASC, g.id ASC
+  `).all();
+  res.json({ segments, attributedGoals });
+});
+
 /* ============== GOALS LOG ============== */
 
 app.get('/api/goals/:gameId', (req, res) => {
@@ -174,12 +196,12 @@ app.get('/api/goals/:gameId', (req, res) => {
 app.post('/api/goals/:gameId', (req, res) => {
   const g = req.body;
   const info = db.prepare(`
-    INSERT INTO goals (game_id, period, time, team, strength, scorer, assists, notes)
-    VALUES (@game_id, @period, @time, @team, @strength, @scorer, @assists, @notes)
+    INSERT INTO goals (game_id, period, time, team, strength, scorer, assists, notes, goalie)
+    VALUES (@game_id, @period, @time, @team, @strength, @scorer, @assists, @notes, @goalie)
   `).run({
     game_id: req.params.gameId, period: g.period || '', time: g.time || '',
     team: g.team || 'OTT', strength: g.strength || 'EV', scorer: g.scorer || '',
-    assists: g.assists || '', notes: g.notes || ''
+    assists: g.assists || '', notes: g.notes || '', goalie: g.goalie || null
   });
   res.json(db.prepare('SELECT * FROM goals WHERE id = ?').get(info.lastInsertRowid));
 });

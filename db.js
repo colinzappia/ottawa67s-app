@@ -68,7 +68,9 @@ CREATE TABLE IF NOT EXISTS goalie_stats (
   min TEXT,
   shots INTEGER DEFAULT 0,
   saves INTEGER DEFAULT 0,
-  pim INTEGER DEFAULT 0
+  pim INTEGER DEFAULT 0,
+  on_seconds INTEGER,
+  off_seconds INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS goals (
@@ -80,7 +82,8 @@ CREATE TABLE IF NOT EXISTS goals (
   strength TEXT,
   scorer TEXT,
   assists TEXT,
-  notes TEXT
+  notes TEXT,
+  goalie TEXT
 );
 
 CREATE TABLE IF NOT EXISTS photos (
@@ -88,5 +91,16 @@ CREATE TABLE IF NOT EXISTS photos (
   dataurl TEXT
 );
 `);
+
+// Migrate existing databases created before these columns existed.
+// CREATE TABLE IF NOT EXISTS only helps brand-new databases — an already-existing table
+// needs an explicit ALTER, which throws if the column is already there, so each is wrapped.
+function tryAddColumn(table, columnDef) {
+  try { db.exec(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`); }
+  catch (e) { /* column already exists — fine */ }
+}
+tryAddColumn('goalie_stats', 'on_seconds INTEGER');
+tryAddColumn('goalie_stats', 'off_seconds INTEGER');
+tryAddColumn('goals', 'goalie TEXT');
 
 module.exports = db;

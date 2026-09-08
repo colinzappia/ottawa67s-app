@@ -602,6 +602,40 @@ function normalizeGoalTime(t) {
   return m + ':' + sec;
 }
 
+// Parses the "GOALTENDER/SAVES (Time)" table for exact on-ice windows per goalie. A blank
+// period prefix on the "On" column means "picks up where the previous goalie on that team left off".
+function parseOfficialReportGoalieTimes(rawLines) {
+  const results = [];
+  const lastOffPeriodByTeam = {};
+  for (let i = 0; i < rawLines.length; i++) {
+    if (/^GOALTENDER\/SAVES/i.test(rawLines[i])) {
+      let j = i + 1;
+      while (j < rawLines.length) {
+        const row = rawLines[j];
+        if (!row.trim()) { j++; continue; }
+        if (/Stars of the Game/i.test(row) || /OFFICIALS/i.test(row) || /TIME OF GAME/i.test(row)) break;
+        const tokens = row.split('\t').map(t => t.trim());
+        const m = tokens[0].match(/^([A-Z]+)\s*-\s*(.+?)\s*\(\d+:\d+\)/);
+        if (m) {
+          const teamShort = m[1];
+          const name = m[2].replace(/\s*\((W|L|OT)\)\s*$/i, '').trim();
+          const onRaw = tokens[tokens.length - 2] || '';
+          const offRaw = tokens[tokens.length - 1] || '';
+          const onMatch = onRaw.match(/^(\w*)\/(\d+:\d+)$/);
+          const offMatch = offRaw.match(/^(\w*)\/(\d+:\d+)$/);
+          const onPeriod = onMatch ? (onMatch[1] || lastOffPeriodByTeam[teamShort] || '1st') : '1st';
+          const offPeriod = offMatch ? offMatch[1] : null;
+          results.push({ teamShort, name, onPeriod, onTime: onMatch ? onMatch[2] : '0:00', offPeriod, offTime: offMatch ? offMatch[2] : null });
+          if (offPeriod) lastOffPeriodByTeam[teamShort] = offPeriod;
+        }
+        j++;
+      }
+      i = j - 1;
+    }
+  }
+  return results;
+}
+
 function compactAggCardsHTML(a) {
   const ppPct = a.ppo > 0 ? ((a.ppg / a.ppo) * 100).toFixed(1) + '%' : '—';
   const pkPct = a.pk_against > 0 ? (((a.pk_against - a.pk_ga) / a.pk_against) * 100).toFixed(1) + '%' : '—';
@@ -757,10 +791,79 @@ async function renderGoalieStreaksTable() {
     </tr>`).join('');
 }
 
+function fmtDuration(totalSeconds) {
+  if (totalSeconds === null || totalSeconds === undefined) return '—';
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = Math.round(totalSeconds % 60);
+  return mins + ':' + String(secs).padStart(2, '0');
+}
+
+// Walks each goalie's ice-time segments in chronological order, treating any goal within a
+// segment as resetting the run, and letting the run continue seamlessly across games when a
+// segment ends without a goal — this measures actual scoreless ice time, not games played.
+function computeIceTimeStreaks(segmentsByGoalie, goalsByGoalie) {
+  const results = {};
+  Object.keys(segmentsByGoalie).forEach(name => {
+    const segments = segmentsByGoalie[name];
+    const goals = goalsByGoalie[name] || [];
+    let longestGap = 0, currentRun = 0;
+    segments.forEach((seg, segIdx) => {
+      let cursor = seg.onSec;
+      const goalsInSeg = goals.filter(g => g.segIdx === segIdx).map(g => g.absSec).sort((a, b) => a - b);
+      goalsInSeg.forEach(gTime => {
+        const gap = gTime - cursor;
+        currentRun += gap;
+        longestGap = Math.max(longestGap, currentRun);
+        currentRun = 0;
+        cursor = gTime;
+      });
+      currentRun += ((seg.offSec ?? cursor) - cursor);
+    });
+    longestGap = Math.max(longestGap, currentRun);
+    results[name] = { longestGapSeconds: longestGap, currentStreakSeconds: currentRun };
+  });
+  return results;
+}
+
+async function renderIceTimeTable() {
+  const body = document.getElementById('t_iceTimeBody');
+  body.innerHTML = '<tr><td colspan="3" style="color:var(--sub);">Loading…</td></tr>';
+  let data;
+  try { data = await api('/api/goalie-ice-time-log'); }
+  catch (e) { body.innerHTML = '<tr><td colspan="3" style="color:var(--sub);">Could not load ice-time data.</td></tr>'; return; }
+  const filter = document.getElementById('t_typeFilter').value;
+  const segRows = filter === 'All' ? data.segments : data.segments.filter(r => (r.gametype || 'Regular Season') === filter);
+  const goalRows = filter === 'All' ? data.attributedGoals : data.attributedGoals.filter(r => (r.gametype || 'Regular Season') === filter);
+  if (segRows.length === 0) { body.innerHTML = '<tr><td colspan="3" style="color:var(--sub);">No ice-time data yet — import a game with the official report\'s goaltender On/Off times.</td></tr>'; return; }
+
+  const segmentsByGoalie = {};
+  segRows.forEach(r => { if (!segmentsByGoalie[r.name]) segmentsByGoalie[r.name] = []; segmentsByGoalie[r.name].push({ onSec: r.on_seconds, offSec: r.off_seconds, game_id: r.game_id }); });
+
+  const goalsByGoalie = {};
+  goalRows.forEach(r => {
+    if (!goalsByGoalie[r.name]) goalsByGoalie[r.name] = [];
+    const segs = segmentsByGoalie[r.name] || [];
+    const segIdx = segs.findIndex(s => s.game_id === r.game_id);
+    if (segIdx === -1) return;
+    const absSec = periodToAbsoluteSeconds(r.period, parseTimeToSeconds(r.time));
+    goalsByGoalie[r.name].push({ segIdx, absSec });
+  });
+
+  const streaks = computeIceTimeStreaks(segmentsByGoalie, goalsByGoalie);
+  const names = Object.keys(streaks).sort((a, b) => streaks[b].currentStreakSeconds - streaks[a].currentStreakSeconds);
+  body.innerHTML = names.map(name => `
+    <tr>
+      <td style="text-align:left;">${name}</td>
+      <td>${fmtDuration(streaks[name].currentStreakSeconds)}</td>
+      <td>${fmtDuration(streaks[name].longestGapSeconds)}</td>
+    </tr>`).join('');
+}
+
 function renderTrendsTab() {
   renderTrendGrids();
   renderStreaksTable();
   renderGoalieStreaksTable();
+  renderIceTimeTable();
 }
 document.getElementById('t_typeFilter').addEventListener('change', renderTrendsTab);
 document.getElementById('t_refreshBtn').addEventListener('click', async () => { await loadGames(); renderTrendsTab(); });
@@ -889,7 +992,7 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
     oppIdx = ottIdx === 0 ? 1 : 0;
   }
 
-  let reportMeta = null, reportRosters = null, reportGoals = null, reportPim = null, reportOttShort = null, reportOppShort = null;
+  let reportMeta = null, reportRosters = null, reportGoals = null, reportPim = null, reportOttShort = null, reportOppShort = null, ottSegments = [];
   if (reportText.trim()) {
     const rawLines = reportText.split('\n').map(l => l.replace(/\r$/, ''));
     reportMeta = parseOfficialReportMeta(rawLines);
@@ -899,6 +1002,37 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
     const shortNames = Object.keys(reportRosters);
     reportOttShort = shortNames.find(t => /ottawa|67/i.test(t));
     reportOppShort = shortNames.find(t => t !== reportOttShort);
+
+    const reportGoalieTimes = parseOfficialReportGoalieTimes(rawLines);
+    const ottBoxScoreGoalies = (teams && teams[teamNames[ottIdx]]) ? teams[teamNames[ottIdx]].goalies : null;
+    const ottTimeEntries = reportGoalieTimes.filter(t => {
+      if (/OTT/i.test(t.teamShort)) return true;
+      if (ottBoxScoreGoalies) return ottBoxScoreGoalies.some(g => g.name.toLowerCase().includes(t.name.toLowerCase()));
+      return false;
+    });
+    ottSegments = ottTimeEntries.map(t => {
+      let resolvedName = t.name;
+      if (ottBoxScoreGoalies) {
+        const match = ottBoxScoreGoalies.find(g => g.name.toLowerCase().includes(t.name.toLowerCase()));
+        if (match) resolvedName = match.name;
+      }
+      return {
+        name: resolvedName,
+        on_seconds: periodToAbsoluteSeconds(t.onPeriod, parseTimeToSeconds(t.onTime)),
+        off_seconds: t.offPeriod ? periodToAbsoluteSeconds(t.offPeriod, parseTimeToSeconds(t.offTime)) : null
+      };
+    });
+    // Attach ice-time windows onto the matching box-score goalie rows, if box score was pasted
+    if (teams && teams[teamNames[ottIdx]]) {
+      teams[teamNames[ottIdx]].goalies = teams[teamNames[ottIdx]].goalies.map(gk => {
+        const seg = ottSegments.find(s => s.name === gk.name);
+        return seg ? { ...gk, on_seconds: seg.on_seconds, off_seconds: seg.off_seconds } : gk;
+      });
+    }
+  }
+  function attributeGoalie(absTime) {
+    const seg = ottSegments.find(s => absTime >= s.on_seconds && (s.off_seconds === null || absTime < s.off_seconds));
+    return seg ? seg.name : null;
   }
 
   // Build the game record: prefer box-score header (more reliable for score/date/venue), fall back to report meta
@@ -969,7 +1103,23 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
       goals: tally[num].goals, assists: tally[num].assists, points: tally[num].goals + tally[num].assists,
       plusMinus: 0, sog: 0, pim: pimMap[num] || 0, fow: 0, fol: 0
     }));
-    await api('/api/player-stats/' + gid, { method: 'PUT', body: JSON.stringify({ skaters, goalies: [] }) });
+    let syntheticGoalies = [];
+    if (ottSegments.length) {
+      const oppGoals = reportGoals.filter(g => g.team === reportOppShort);
+      const gaCount = {};
+      ottSegments.forEach(s => { gaCount[s.name] = 0; });
+      oppGoals.forEach(g => {
+        const attributed = attributeGoalie(periodToAbsoluteSeconds(g.period, parseTimeToSeconds(g.time)));
+        if (attributed && gaCount[attributed] !== undefined) gaCount[attributed]++;
+      });
+      syntheticGoalies = ottSegments.map(s => {
+        const durationSec = (s.off_seconds ?? periodToAbsoluteSeconds('3rd', 1200)) - s.on_seconds;
+        const mins = Math.floor(durationSec / 60), secs = durationSec % 60;
+        return { name: s.name, ga: gaCount[s.name] || 0, min: mins + ':' + String(secs).padStart(2, '0'),
+          shots: 0, saves: 0, pim: 0, on_seconds: s.on_seconds, off_seconds: s.off_seconds };
+      });
+    }
+    await api('/api/player-stats/' + gid, { method: 'PUT', body: JSON.stringify({ skaters, goalies: syntheticGoalies }) });
   }
 
   // Build and save the goals log, merging strength/on-ice data from the report when both sources are present
@@ -1005,9 +1155,10 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
       if (strength === 'PP') ppCount++;
       if (strength === 'SH') shCount++;
       const notes = [g.flag, onIceNote].filter(Boolean).join(' — ');
+      const attributedGoalie = (teamCode === 'OPP' && ottSegments.length) ? attributeGoalie(periodToAbsoluteSeconds(g.period, parseTimeToSeconds(g.time))) : null;
       await api('/api/goals/' + gid, {
         method: 'POST',
-        body: JSON.stringify({ period: g.period, time: g.time, team: teamCode, strength, scorer: g.scorerName, assists: g.assists.join(', '), notes })
+        body: JSON.stringify({ period: g.period, time: g.time, team: teamCode, strength, scorer: g.scorerName, assists: g.assists.join(', '), notes, goalie: attributedGoalie })
       });
     }
   } else if (reportGoals) {
@@ -1021,9 +1172,10 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
       const onIceNote = (plusNames.length || minusNames.length) ? `On ice for: ${plusNames.join(', ')}. On ice against: ${minusNames.join(', ')}.` : '';
       if (g.strength === 'PP') ppCount++;
       if (g.strength === 'SH') shCount++;
+      const attributedGoalie = (teamCode === 'OPP' && ottSegments.length) ? attributeGoalie(periodToAbsoluteSeconds(g.period, parseTimeToSeconds(g.time))) : null;
       await api('/api/goals/' + gid, {
         method: 'POST',
-        body: JSON.stringify({ period: g.period, time: g.time, team: teamCode, strength: g.strength, scorer: scorerName, assists: assistNames.join(', '), notes: onIceNote })
+        body: JSON.stringify({ period: g.period, time: g.time, team: teamCode, strength: g.strength, scorer: scorerName, assists: assistNames.join(', '), notes: onIceNote, goalie: attributedGoalie })
       });
     }
   }
