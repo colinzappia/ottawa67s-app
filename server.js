@@ -153,6 +153,17 @@ app.get('/api/skater-game-log', (req, res) => {
   res.json(rows);
 });
 
+// Per-game goalie rows joined with game date/type/result, ordered chronologically — used for start streaks and GAA
+app.get('/api/goalie-game-log', (req, res) => {
+  const rows = db.prepare(`
+    SELECT gs.name, gs.ga, gs.min, gs.shots, gs.saves, g.id as game_id, g.date as game_date, g.gametype, g.opponent, g.result
+    FROM goalie_stats gs
+    JOIN games g ON gs.game_id = g.id
+    ORDER BY g.date ASC, g.id ASC
+  `).all();
+  res.json(rows);
+});
+
 /* ============== GOALS LOG ============== */
 
 app.get('/api/goals/:gameId', (req, res) => {

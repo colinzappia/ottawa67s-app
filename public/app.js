@@ -689,9 +689,78 @@ async function renderStreaksTable() {
     </tr>`).join('');
 }
 
+// Determines each game's "starter" (goalie with the most minutes that game), then computes
+// consecutive-starts streaks, decisions (W-L-OTL in games they started), and rolling GAA
+// across all logged appearances (starts and relief) for each goalie.
+function computeGoalieStreaksFromLog(rows) {
+  const byGame = {};
+  rows.forEach(r => { if (!byGame[r.game_id]) byGame[r.game_id] = []; byGame[r.game_id].push(r); });
+  const starterByGame = {};
+  Object.keys(byGame).forEach(gid => {
+    const list = byGame[gid];
+    const starter = list.slice().sort((a, b) => minToSeconds(b.min) - minToSeconds(a.min))[0];
+    starterByGame[gid] = starter.name;
+  });
+
+  const gameOrder = [];
+  const seen = new Set();
+  rows.forEach(r => { if (!seen.has(r.game_id)) { seen.add(r.game_id); gameOrder.push({ game_id: r.game_id, result: r.result }); } });
+
+  const goalieNames = [...new Set(rows.map(r => r.name))];
+  return goalieNames.map(name => {
+    const startedFlags = gameOrder.map(g => starterByGame[g.game_id] === name ? 1 : 0);
+    let longestStart = 0, runStart = 0;
+    startedFlags.forEach(f => { if (f) { runStart++; longestStart = Math.max(longestStart, runStart); } else runStart = 0; });
+    let currentStart = 0;
+    for (let i = startedFlags.length - 1; i >= 0; i--) { if (startedFlags[i]) currentStart++; else break; }
+
+    let w = 0, l = 0, otl = 0;
+    gameOrder.forEach(g => {
+      if (starterByGame[g.game_id] === name) {
+        if (g.result === 'W') w++; else if (g.result === 'L') l++; else if (g.result === 'OTL') otl++;
+      }
+    });
+
+    const appearances = rows.filter(r => r.name === name);
+    function gaaForLastN(n) {
+      const slice = appearances.slice(-n);
+      let totalGA = 0, totalSec = 0;
+      slice.forEach(a => { totalGA += Number(a.ga) || 0; totalSec += minToSeconds(a.min); });
+      if (totalSec === 0) return null;
+      return (totalGA / (totalSec / 3600)).toFixed(2);
+    }
+    return { name, starts: startedFlags.filter(Boolean).length, currentStart, longestStart, w, l, otl,
+      gaaLast5: gaaForLastN(5), gaaLast10: gaaForLastN(10) };
+  });
+}
+
+async function renderGoalieStreaksTable() {
+  const body = document.getElementById('t_goalieStreaksBody');
+  body.innerHTML = '<tr><td colspan="7" style="color:var(--sub);">Loading…</td></tr>';
+  let rows;
+  try { rows = await api('/api/goalie-game-log'); }
+  catch (e) { body.innerHTML = '<tr><td colspan="7" style="color:var(--sub);">Could not load goalie data.</td></tr>'; return; }
+  const filter = document.getElementById('t_typeFilter').value;
+  const filtered = filter === 'All' ? rows : rows.filter(r => (r.gametype || 'Regular Season') === filter);
+  if (filtered.length === 0) { body.innerHTML = '<tr><td colspan="7" style="color:var(--sub);">No goalie stats saved for this filter yet.</td></tr>'; return; }
+  const streaks = computeGoalieStreaksFromLog(filtered);
+  streaks.sort((a, b) => b.starts - a.starts);
+  body.innerHTML = streaks.map(s => `
+    <tr>
+      <td style="text-align:left;">${s.name}</td>
+      <td>${s.starts}</td>
+      <td>${s.currentStart}</td>
+      <td>${s.longestStart}</td>
+      <td>${s.w}-${s.l}-${s.otl}</td>
+      <td>${s.gaaLast5 ?? '—'}</td>
+      <td>${s.gaaLast10 ?? '—'}</td>
+    </tr>`).join('');
+}
+
 function renderTrendsTab() {
   renderTrendGrids();
   renderStreaksTable();
+  renderGoalieStreaksTable();
 }
 document.getElementById('t_typeFilter').addEventListener('change', renderTrendsTab);
 document.getElementById('t_refreshBtn').addEventListener('click', async () => { await loadGames(); renderTrendsTab(); });
