@@ -404,10 +404,23 @@ function parseTimeToSeconds(t) {
   return (parts[0] || 0) * 60 + (parts[1] || 0);
 }
 const PERIOD_LENGTH_SECONDS = 1200; // 20-minute regulation period
+
+// Different sources label overtime differently — the official report says "OT", but the box
+// score sometimes numbers it as the "4th" period instead. Normalize both to the same label so
+// goal-matching and time math treat them as the same period.
+function normalizePeriodLabel(p) {
+  if (!p) return p;
+  const s = p.trim();
+  if (/^4(th)?$/i.test(s)) return 'OT';
+  if (/^OT/i.test(s)) return 'OT';
+  return s;
+}
+
 function periodToAbsoluteSeconds(periodLabel, elapsedSeconds) {
+  const label = normalizePeriodLabel(periodLabel);
   const map = { '1st': 0, '2nd': 1, '3rd': 2 };
-  if (map[periodLabel] !== undefined) return map[periodLabel] * PERIOD_LENGTH_SECONDS + elapsedSeconds;
-  if (/^OT/i.test(periodLabel)) return 3 * PERIOD_LENGTH_SECONDS + elapsedSeconds;
+  if (map[label] !== undefined) return map[label] * PERIOD_LENGTH_SECONDS + elapsedSeconds;
+  if (label === 'OT') return 3 * PERIOD_LENGTH_SECONDS + elapsedSeconds;
   return 99999 + elapsedSeconds; // SO or unrecognized — keep far away so it never overlaps a real penalty window
 }
 
@@ -1156,7 +1169,7 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
       let onIceNote = '';
       let matchedReportGoal = null;
       if (reportGoals) {
-        matchedReportGoal = reportGoals.find(rg => rg.period === g.period && normalizeGoalTime(rg.time) === normalizeGoalTime(g.time));
+        matchedReportGoal = reportGoals.find(rg => normalizePeriodLabel(rg.period) === normalizePeriodLabel(g.period) && normalizeGoalTime(rg.time) === normalizeGoalTime(g.time));
       }
       if (matchedReportGoal) {
         strength = matchedReportGoal.strength;
