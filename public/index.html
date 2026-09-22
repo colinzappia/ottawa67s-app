@@ -29,15 +29,16 @@
       <input type="file" accept="image/*" id="awayLogoInput" class="no-print">
       <img id="awayLogoPreview" class="board-logo-img">
       <div class="btn-row no-print"><button class="small ghost" id="awayLogoRemove">Remove Logo</button></div>
-      <div class="meta-box"><label>Visiting Team</label><div contenteditable="true">Away Team Name</div></div>
+      <div class="meta-box"><label>Opponent</label><div contenteditable="true">Opponent Team Name</div></div>
     </div>
     <div class="board-team-block">
       <input type="file" accept="image/*" id="homeLogoInput" class="no-print">
       <img id="homeLogoPreview" class="board-logo-img">
       <div class="btn-row no-print"><button class="small ghost" id="homeLogoRemove">Remove Logo</button></div>
-      <div class="meta-box"><label>Home Team</label><div contenteditable="true">Ottawa 67's</div></div>
+      <div class="meta-box"><label>Ottawa 67's</label><div contenteditable="true">Ottawa 67's</div></div>
     </div>
   </div>
+  <div class="hint" style="margin-top:-10px;margin-bottom:14px;">Ottawa always sits on the right so their logo stays put game to game — swap the opponent's name and logo on the left each time, regardless of who's actually hosting.</div>
   <div class="top-meta">
     <div class="meta-box"><label>Game Type</label>
       <select id="boardGameType">
@@ -54,7 +55,7 @@
 
   <div class="teams">
     <div class="team-panel away">
-      <div class="team-header"><span contenteditable="true">AWAY TEAM</span><span contenteditable="true">Record</span></div>
+      <div class="team-header"><span contenteditable="true">OPPONENT</span><span contenteditable="true">Record</span></div>
       <div class="section-label">Forward Lines</div>
       <div class="line-row"><span class="tag">L1</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
       <div class="line-row"><span class="tag">L2</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
@@ -80,7 +81,7 @@
     </div>
 
     <div class="team-panel home">
-      <div class="team-header"><span contenteditable="true">HOME TEAM</span><span contenteditable="true">Record</span></div>
+      <div class="team-header"><span contenteditable="true">OTTAWA 67'S</span><span contenteditable="true">Record</span></div>
       <div class="section-label">Forward Lines</div>
       <div class="line-row"><span class="tag">L1</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
       <div class="line-row"><span class="tag">L2</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
@@ -106,6 +107,33 @@
     </div>
   </div>
 
+  <div class="games-header" style="margin-top:4px;"><h2 style="font-size:12px;">Opponent — Special Teams</h2></div>
+  <div class="special-teams-single">
+    <div class="st-panel-full">
+      <h3>Power Play</h3>
+      <div class="st-stats-row">
+        <div><label>GP</label><div contenteditable="true">0</div></div>
+        <div><label>ADV</label><div contenteditable="true">0</div></div>
+        <div><label>GF</label><div contenteditable="true">0</div></div>
+        <div><label>PP%</label><div contenteditable="true">0.0%</div></div>
+        <div><label>SHGA</label><div contenteditable="true">0</div></div>
+        <div><label>League Rank</label><div contenteditable="true">#</div></div>
+      </div>
+    </div>
+    <div class="st-panel-full">
+      <h3>Penalty Kill</h3>
+      <div class="st-stats-row">
+        <div><label>GP</label><div contenteditable="true">0</div></div>
+        <div><label>TSH</label><div contenteditable="true">0</div></div>
+        <div><label>PPGA</label><div contenteditable="true">0</div></div>
+        <div><label>PK%</label><div contenteditable="true">0.0%</div></div>
+        <div><label>SHGF</label><div contenteditable="true">0</div></div>
+        <div><label>League Rank</label><div contenteditable="true">#</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="games-header" style="margin-top:4px;"><h2 style="font-size:12px;">Ottawa 67's — Special Teams</h2></div>
   <div class="special-teams-single">
     <div class="st-panel-full">
       <h3>Power Play</h3>
@@ -205,7 +233,7 @@
     </div>
     <div class="form-grid">
       <div><label>Result</label>
-        <select id="f_result"><option value="W">Win</option><option value="L">Loss</option><option value="OTL">OT / SO Loss</option></select>
+        <select id="f_result"><option value="W">Win</option><option value="L">Loss</option><option value="OTL">OT Loss</option><option value="SOL">SO Loss</option></select>
       </div>
       <div><label>67's Goals (Final)</label><input type="number" id="f_gf" min="0" required></div>
       <div><label>Opponent Goals (Final)</label><input type="number" id="f_ga" min="0" required></div>
@@ -292,6 +320,15 @@
 
 <!-- ============ TAB 4: GOALS LOG ============ -->
 <div class="tab-panel" id="panel-goals">
+  <div class="btn-row" style="align-items:center;margin-bottom:12px;">
+    <label style="margin:0;">Game Type:</label>
+    <select id="g_typeFilter" style="width:auto;">
+      <option value="All" selected>All Games</option>
+      <option value="Regular Season">Regular Season</option>
+      <option value="Preseason">Preseason</option>
+      <option value="Playoffs">Playoffs</option>
+    </select>
+  </div>
   <div class="player-select-row">
     <div><label>Select Game</label><select id="g_gameSelect"></select></div>
     <div style="flex:0;"><button class="ghost" id="g_refreshGames">Refresh List</button></div>
@@ -366,7 +403,7 @@
   <div class="hint" style="margin-bottom:10px;">The "starter" for a game is whichever logged goalie played the most minutes that game. Win/loss/OTL record reflects the team's result in games that goalie started. GAA is calculated across all logged appearances (starts and relief), not starts only.</div>
   <div class="season-table-wrap">
     <table class="stats-table" id="t_goalieStreaksTable">
-      <thead><tr><th>Goalie</th><th>Starts</th><th>Current Start Streak</th><th>Longest Start Streak</th><th>Record (W-L-OTL)</th><th>GAA (Last 5)</th><th>GAA (Last 10)</th></tr></thead>
+      <thead><tr><th>Goalie</th><th>Starts</th><th>Current Start Streak</th><th>Longest Start Streak</th><th>Record (W-L-OTL-SOL)</th><th>GAA (Last 5)</th><th>GAA (Last 10)</th></tr></thead>
       <tbody id="t_goalieStreaksBody"></tbody>
     </table>
   </div>

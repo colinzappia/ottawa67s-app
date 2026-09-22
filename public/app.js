@@ -104,13 +104,14 @@ function filteredGames() {
   return games.filter(g => (g.gametype || 'Regular Season') === filter);
 }
 function computeAggregatesForGames(list) {
-  const agg = { gp: list.length, w: 0, l: 0, otl: 0, pts: 0, gf: 0, ga: 0, sf: 0, sa: 0,
+  const agg = { gp: list.length, w: 0, l: 0, otl: 0, sol: 0, pts: 0, gf: 0, ga: 0, sf: 0, sa: 0,
     ppg: 0, ppo: 0, pk_against: 0, pk_ga: 0, shgf: 0, shga: 0, engf: 0, enga: 0,
     sogf: 0, soga: 0, psgf: 0, psga: 0 };
   list.forEach(g => {
     if (g.result === 'W') { agg.w++; agg.pts += 2; }
     else if (g.result === 'L') { agg.l++; }
     else if (g.result === 'OTL') { agg.otl++; agg.pts += 1; }
+    else if (g.result === 'SOL') { agg.sol++; agg.pts += 1; }
     agg.gf += Number(g.gf) || 0; agg.ga += Number(g.ga) || 0;
     agg.sf += Number(g.sf) || 0; agg.sa += Number(g.sa) || 0;
     agg.ppg += Number(g.ppg) || 0; agg.ppo += Number(g.ppo) || 0;
@@ -132,9 +133,11 @@ function renderAggregates() {
   const diff = a.gf - a.ga; const diffStr = (diff > 0 ? '+' : '') + diff;
   const gpg = a.gp > 0 ? (a.gf / a.gp).toFixed(2) : '0.00';
   const gapg = a.gp > 0 ? (a.ga / a.gp).toFixed(2) : '0.00';
+  const sfpg = a.gp > 0 ? (a.sf / a.gp).toFixed(1) : '0.0';
+  const sapg = a.gp > 0 ? (a.sa / a.gp).toFixed(1) : '0.0';
   document.getElementById('aggGrid').innerHTML = `
     <div class="agg-card"><div class="val">${a.gp}</div><div class="lbl">Games</div></div>
-    <div class="agg-card"><div class="val">${a.w}-${a.l}-${a.otl}</div><div class="lbl">Record</div></div>
+    <div class="agg-card"><div class="val">${a.w}-${a.l}-${a.otl}-${a.sol}</div><div class="lbl">Record (W-L-OTL-SOL)</div></div>
     <div class="agg-card"><div class="val">${a.pts}</div><div class="lbl">Points</div></div>
     <div class="agg-card"><div class="val">${a.gf}</div><div class="lbl">Goals For</div></div>
     <div class="agg-card"><div class="val">${a.ga}</div><div class="lbl">Goals Against</div></div>
@@ -142,6 +145,8 @@ function renderAggregates() {
   document.getElementById('aggGrid2').innerHTML = `
     <div class="agg-card"><div class="val">${gpg}</div><div class="lbl">Goals/Game</div></div>
     <div class="agg-card"><div class="val">${gapg}</div><div class="lbl">GA/Game</div></div>
+    <div class="agg-card"><div class="val">${sfpg}</div><div class="lbl">Shots For/Game</div></div>
+    <div class="agg-card"><div class="val">${sapg}</div><div class="lbl">Shots Against/Game</div></div>
     <div class="agg-card"><div class="val">${ppPct}</div><div class="lbl">Power Play %</div></div>
     <div class="agg-card"><div class="val">${pkPct}</div><div class="lbl">Penalty Kill %</div></div>
     <div class="agg-card"><div class="val">${a.shgf} / ${a.shga}</div><div class="lbl">SH Goals F/A</div></div>
@@ -175,6 +180,7 @@ function renderGamesList() {
           ${g.sf || g.sa ? ' · Shots ' + (g.sf || 0) + '-' + (g.sa || 0) : ''}
           ${g.goalie ? ' · G: ' + g.goalie : ''}
           ${g.ppo ? ' · PP ' + (g.ppg || 0) + '/' + g.ppo : ''}
+          ${g.pk_against ? ' · PK ' + (g.pk_against - (g.pk_ga || 0)) + '/' + g.pk_against : ''}
           ${extras.length ? ' · ' + extras.join(' · ') : ''}
         </div>
         ${g.notes ? '<div class="game-notes">' + g.notes.replace(/</g, '&lt;') + '</div>' : ''}
@@ -472,7 +478,9 @@ function parseGameHeader(lines, teamNames) {
 
       let result;
       if (ottScore > oppScore) result = 'W';
-      else result = (wentOT || wentSO) ? 'OTL' : 'L';
+      else if (wentSO) result = 'SOL';
+      else if (wentOT) result = 'OTL';
+      else result = 'L';
 
       let gametype = 'Regular Season';
       let dateISO = '';
@@ -642,7 +650,7 @@ function compactAggCardsHTML(a) {
   const diff = a.gf - a.ga; const diffStr = (diff > 0 ? '+' : '') + diff;
   return `
     <div class="agg-card"><div class="val">${a.gp}</div><div class="lbl">Games</div></div>
-    <div class="agg-card"><div class="val">${a.w}-${a.l}-${a.otl}</div><div class="lbl">Record</div></div>
+    <div class="agg-card"><div class="val">${a.w}-${a.l}-${a.otl}-${a.sol}</div><div class="lbl">Record (W-L-OTL-SOL)</div></div>
     <div class="agg-card"><div class="val">${a.pts}</div><div class="lbl">Points</div></div>
     <div class="agg-card"><div class="val">${a.gf}</div><div class="lbl">Goals For</div></div>
     <div class="agg-card"><div class="val">${a.ga}</div><div class="lbl">Goals Against</div></div>
@@ -748,10 +756,10 @@ function computeGoalieStreaksFromLog(rows) {
     let currentStart = 0;
     for (let i = startedFlags.length - 1; i >= 0; i--) { if (startedFlags[i]) currentStart++; else break; }
 
-    let w = 0, l = 0, otl = 0;
+    let w = 0, l = 0, otl = 0, sol = 0;
     gameOrder.forEach(g => {
       if (starterByGame[g.game_id] === name) {
-        if (g.result === 'W') w++; else if (g.result === 'L') l++; else if (g.result === 'OTL') otl++;
+        if (g.result === 'W') w++; else if (g.result === 'L') l++; else if (g.result === 'OTL') otl++; else if (g.result === 'SOL') sol++;
       }
     });
 
@@ -763,7 +771,7 @@ function computeGoalieStreaksFromLog(rows) {
       if (totalSec === 0) return null;
       return (totalGA / (totalSec / 3600)).toFixed(2);
     }
-    return { name, starts: startedFlags.filter(Boolean).length, currentStart, longestStart, w, l, otl,
+    return { name, starts: startedFlags.filter(Boolean).length, currentStart, longestStart, w, l, otl, sol,
       gaaLast5: gaaForLastN(5), gaaLast10: gaaForLastN(10) };
   });
 }
@@ -785,7 +793,7 @@ async function renderGoalieStreaksTable() {
       <td>${s.starts}</td>
       <td>${s.currentStart}</td>
       <td>${s.longestStart}</td>
-      <td>${s.w}-${s.l}-${s.otl}</td>
+      <td>${s.w}-${s.l}-${s.otl}-${s.sol}</td>
       <td>${s.gaaLast5 ?? '—'}</td>
       <td>${s.gaaLast10 ?? '—'}</td>
     </tr>`).join('');
@@ -1189,7 +1197,13 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
 
   const skaterCount = teams ? teams[teamNames[ottIdx]].skaters.length : (reportRosters && reportOttShort ? Object.keys(reportRosters[reportOttShort]).length : 0);
   const strengthNote = reportGoals ? 'tagged directly from the official report where matched, inferred from penalty timing otherwise' : 'inferred from penalty timing';
-  alert(`Created the game vs ${newGame.opponent} with ${skaterCount} skaters and ${goalCount} goal(s) logged (${ppCount} power play, ${shCount} shorthanded, ${strengthNote}). Please double-check the date, venue, and result on the Game Log tab. Empty-net and penalty-shot goals aren't auto-detected — tag those manually in the Goals Log if any occurred.`);
+  let successMsg = `Created the game vs ${newGame.opponent} with ${skaterCount} skaters and ${goalCount} goal(s) logged (${ppCount} power play, ${shCount} shorthanded, ${strengthNote}). Please double-check the date, venue, and result on the Game Log tab. Empty-net and penalty-shot goals aren't auto-detected — tag those manually in the Goals Log if any occurred.`;
+  if (goalCount === 0) {
+    successMsg = `Created the game vs ${newGame.opponent}, but no individual goals could be parsed from the pasted text — the Goals Log for this game will be empty. Check that the pasted text includes the full "Goals" section, or add goals manually on the Goals Log tab.\n\n` + successMsg;
+  }
+  alert(successMsg);
+  document.getElementById('p_pasteArea').value = '';
+  document.getElementById('p_pasteAreaReport').value = '';
 });
 
 document.getElementById('p_saveGameStats').addEventListener('click', async () => {
@@ -1214,15 +1228,20 @@ async function renderSeasonPlayerTotals() {
 }
 
 /* ===================== GOALS LOG TAB ===================== */
+function goalsFilteredGames() {
+  const filter = document.getElementById('g_typeFilter').value;
+  return filter === 'All' ? games : games.filter(g => (g.gametype || 'Regular Season') === filter);
+}
 async function populateGoalsGameSelect() {
   const sel = document.getElementById('g_gameSelect');
-  const sorted = [...games].sort((a, b) => new Date(b.date) - new Date(a.date));
-  if (sorted.length === 0) { sel.innerHTML = '<option value="">No games logged yet</option>'; return; }
+  const sorted = [...goalsFilteredGames()].sort((a, b) => new Date(b.date) - new Date(a.date));
+  if (sorted.length === 0) { sel.innerHTML = '<option value="">No games logged for this filter</option>'; await renderGoalsForSelectedGame(); return; }
   sel.innerHTML = sorted.map(g => `<option value="${g.id}">${fmtDate(g.date)} — ${g.venue === 'Home' ? 'vs' : '@'} ${g.opponent} (${g.gf}-${g.ga})</option>`).join('');
   await renderGoalsForSelectedGame();
 }
 document.getElementById('g_gameSelect').addEventListener('change', renderGoalsForSelectedGame);
 document.getElementById('g_refreshGames').addEventListener('click', populateGoalsGameSelect);
+document.getElementById('g_typeFilter').addEventListener('change', async () => { await populateGoalsGameSelect(); await renderSeasonGoalsBreakdown(); });
 function currentGoalsGameId() { return document.getElementById('g_gameSelect').value; }
 
 async function renderGoalsForSelectedGame() {
@@ -1262,7 +1281,8 @@ document.getElementById('goalForm').addEventListener('submit', async function (e
   await renderSeasonGoalsBreakdown();
 });
 async function renderSeasonGoalsBreakdown() {
-  const counts = await api('/api/goals-season-breakdown');
+  const filter = document.getElementById('g_typeFilter').value;
+  const counts = await api('/api/goals-season-breakdown?gametype=' + encodeURIComponent(filter));
   const wrap = document.getElementById('g_seasonAgg');
   wrap.innerHTML = `
     <div class="agg-card"><div class="val">${counts.OTT.EV}</div><div class="lbl">67's EV Goals</div></div>

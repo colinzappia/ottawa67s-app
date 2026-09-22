@@ -212,7 +212,18 @@ app.delete('/api/goals/entry/:id', (req, res) => {
 });
 
 app.get('/api/goals-season-breakdown', (req, res) => {
-  const rows = db.prepare('SELECT team, strength, COUNT(*) as count FROM goals GROUP BY team, strength').all();
+  const gametype = req.query.gametype;
+  let rows;
+  if (gametype && gametype !== 'All') {
+    rows = db.prepare(`
+      SELECT go.team, go.strength, COUNT(*) as count
+      FROM goals go JOIN games g ON go.game_id = g.id
+      WHERE g.gametype = ?
+      GROUP BY go.team, go.strength
+    `).all(gametype);
+  } else {
+    rows = db.prepare('SELECT team, strength, COUNT(*) as count FROM goals GROUP BY team, strength').all();
+  }
   const out = { OTT: { EV: 0, PP: 0, SH: 0, EN: 0, PS: 0 }, OPP: { EV: 0, PP: 0, SH: 0, EN: 0, PS: 0 } };
   rows.forEach(r => { if (out[r.team] && out[r.team][r.strength] !== undefined) out[r.team][r.strength] = r.count; });
   res.json(out);
