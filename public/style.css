@@ -54,7 +54,7 @@ textarea{resize:vertical;min-height:50px;}
 .dpairs .line-row, .goalies .line-row, .specialteams .line-row{grid-template-columns:28px 1fr 1fr;}
 .photo-block{padding:10px 12px;border-top:1px solid var(--line);}
 .photo-block label{margin-bottom:4px;}
-.photo-preview{max-width:100%;border-radius:6px;border:1px solid var(--line);margin-top:6px;display:none;}
+.photo-preview{max-width:100%;border-radius:6px;border:1px solid var(--line);margin-top:6px;display:none;overflow:hidden;}
 .photo-preview.has-img{display:block;}
 .special-teams{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px;}
 .st-panel{border:1px solid var(--line);border-radius:8px;padding:10px 12px;}

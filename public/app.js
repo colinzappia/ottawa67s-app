@@ -43,8 +43,14 @@ async function loadPhotos() {
 }
 function applyPhoto(team, dataurl) {
   const preview = document.getElementById(team + 'PhotoPreview');
-  if (dataurl) { preview.src = dataurl; preview.classList.add('has-img'); }
-  else { preview.src = ''; preview.classList.remove('has-img'); }
+  if (!dataurl) { preview.innerHTML = ''; preview.classList.remove('has-img'); return; }
+  if (dataurl.startsWith('data:application/pdf')) {
+    preview.innerHTML = `<iframe src="${dataurl}" style="width:100%;height:420px;border:none;display:block;"></iframe>
+      <div style="margin-top:4px;"><a href="${dataurl}" target="_blank" style="font-size:11px;">Open PDF in new tab</a></div>`;
+  } else {
+    preview.innerHTML = `<img src="${dataurl}" style="width:100%;height:auto;display:block;">`;
+  }
+  preview.classList.add('has-img');
 }
 function applyLogo(side, dataurl) {
   const preview = document.getElementById(side + 'LogoPreview');
