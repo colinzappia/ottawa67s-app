@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const pdfParse = require('pdf-parse');
 const db = require('./db');
 
 const app = express();
@@ -249,6 +250,50 @@ app.put('/api/photos/:team', (req, res) => {
 app.delete('/api/photos/:team', (req, res) => {
   db.prepare('DELETE FROM photos WHERE team = ?').run(req.params.team);
   res.json({ ok: true });
+});
+
+/* ============== MEDIA KIT PDF — SPECIALTY TEAMS ============== */
+
+function parseSpecialtyTeamsFromText(fullText) {
+  const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
+  let mode = null;
+  const pp = [], pk = [];
+  const rowRe = /^(\d+)\s+(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+\.\d+)\s+(\d+)\s*$/;
+  for (const line of lines) {
+    if (/^Team Power Play$/i.test(line)) { mode = 'PP'; continue; }
+    if (/^Team Penalty Kill$/i.test(line)) { mode = 'PK'; continue; }
+    if (/^Team Overtime Performance$/i.test(line)) { mode = null; continue; }
+    if (mode) {
+      const m = line.match(rowRe);
+      if (m) {
+        const rank = parseInt(m[1]), team = m[2].trim(), gp = parseInt(m[3]);
+        const col2 = parseInt(m[4]), col3 = parseInt(m[5]), pct = parseFloat(m[6]), col5 = parseInt(m[7]);
+        if (mode === 'PP') pp.push({ rank, team, gp, adv: col2, gf: col3, ppPct: pct, shga: col5 });
+        else pk.push({ rank, team, gp, tsh: col2, ppga: col3, pkPct: pct, shgf: col5 });
+      }
+    }
+  }
+  return { pp, pk };
+}
+
+app.post('/api/fetch-specialty-teams', async (req, res) => {
+  const { url } = req.body;
+  if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'A valid http(s) URL is required.' });
+  try {
+    const pdfRes = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' }
+    });
+    if (!pdfRes.ok) return res.status(502).json({ error: 'Could not download the PDF (status ' + pdfRes.status + ').' });
+    const buffer = Buffer.from(await pdfRes.arrayBuffer());
+    const parsed = await pdfParse(buffer);
+    const { pp, pk } = parseSpecialtyTeamsFromText(parsed.text);
+    if (pp.length === 0 && pk.length === 0) {
+      return res.status(422).json({ error: 'Downloaded the PDF but could not find a "Specialty Team Records" section in it — the layout may not match what this parser expects.' });
+    }
+    res.json({ pp, pk });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch or parse the PDF: ' + err.message });
+  }
 });
 
 app.listen(PORT, () => {

@@ -29,7 +29,7 @@
       <input type="file" accept="image/*" id="awayLogoInput" class="no-print">
       <img id="awayLogoPreview" class="board-logo-img">
       <div class="btn-row no-print"><button class="small ghost" id="awayLogoRemove">Remove Logo</button></div>
-      <div class="meta-box"><label>Opponent</label><div contenteditable="true">Opponent Team Name</div></div>
+      <div class="meta-box"><label>Opponent</label><div contenteditable="true" id="boardOpponentName">Opponent Team Name</div></div>
     </div>
     <div class="board-team-block">
       <input type="file" accept="image/*" id="homeLogoInput" class="no-print">
@@ -44,6 +44,15 @@
     <label>Combined Lineups (optional — one file with both teams on it, fills in both panels below)</label>
     <input type="file" accept="image/*,application/pdf" id="combinedPhotoInput" class="no-print">
     <div class="btn-row no-print"><button class="small ghost" id="combinedPhotoRemove">Remove From Both</button></div>
+  </div>
+
+  <div class="photo-block no-print" style="border:1px solid var(--line);border-radius:8px;margin-bottom:16px;">
+    <label>Media Kit PDF Link (optional — auto-fills PP/PK stats and rank for both teams below)</label>
+    <input type="text" id="specialtyTeamsUrl" placeholder="Paste the media kit PDF link here...">
+    <div class="btn-row no-print">
+      <button class="primary small" id="specialtyTeamsFetchBtn">Fetch PP/PK</button>
+    </div>
+    <div class="hint" id="specialtyTeamsStatus"></div>
   </div>
   <div class="top-meta">
     <div class="meta-box"><label>Game Type</label>
@@ -80,8 +89,8 @@
       </div>
       <div class="section-label">Special Teams</div>
       <div class="specialteams">
-        <div class="line-row"><span class="tag">PP</span><span contenteditable="true">GP/ADV/GF/PP%/SHGA</span><span contenteditable="true">Rank #</span></div>
-        <div class="line-row"><span class="tag">PK</span><span contenteditable="true">GP/TSH/PPGA/PK%/SHGF</span><span contenteditable="true">Rank #</span></div>
+        <div class="line-row"><span class="tag">PP</span><span contenteditable="true" id="awayPP">GP/ADV/GF/PP%/SHGA</span><span contenteditable="true" id="awayPPRank">Rank #</span></div>
+        <div class="line-row"><span class="tag">PK</span><span contenteditable="true" id="awayPK">GP/TSH/PPGA/PK%/SHGF</span><span contenteditable="true" id="awayPKRank">Rank #</span></div>
       </div>
       <div class="photo-block no-print">
         <label>Lines Photo (optional)</label>
@@ -111,8 +120,8 @@
       </div>
       <div class="section-label">Special Teams</div>
       <div class="specialteams">
-        <div class="line-row"><span class="tag">PP</span><span contenteditable="true">GP/ADV/GF/PP%/SHGA</span><span contenteditable="true">Rank #</span></div>
-        <div class="line-row"><span class="tag">PK</span><span contenteditable="true">GP/TSH/PPGA/PK%/SHGF</span><span contenteditable="true">Rank #</span></div>
+        <div class="line-row"><span class="tag">PP</span><span contenteditable="true" id="homePP">GP/ADV/GF/PP%/SHGA</span><span contenteditable="true" id="homePPRank">Rank #</span></div>
+        <div class="line-row"><span class="tag">PK</span><span contenteditable="true" id="homePK">GP/TSH/PPGA/PK%/SHGF</span><span contenteditable="true" id="homePKRank">Rank #</span></div>
       </div>
       <div class="photo-block no-print">
         <label>Lines Photo (optional)</label>

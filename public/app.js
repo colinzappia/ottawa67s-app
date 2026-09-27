@@ -115,6 +115,55 @@ function wireCombinedPhotoUpload() {
 }
 wireCombinedPhotoUpload();
 
+function findSpecialtyTeamRow(rows, typedName) {
+  const typed = (typedName || '').trim().toLowerCase();
+  if (!typed) return null;
+  return rows.find(r => r.team.toLowerCase().includes(typed) || typed.includes(r.team.toLowerCase().split(' ')[0]));
+}
+function formatPP(row) { return `GP:${row.gp} ADV:${row.adv} GF:${row.gf} PP%:${row.ppPct.toFixed(1)} SHGA:${row.shga}`; }
+function formatPK(row) { return `GP:${row.gp} TSH:${row.tsh} PPGA:${row.ppga} PK%:${row.pkPct.toFixed(1)} SHGF:${row.shgf}`; }
+
+document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('specialtyTeamsStatus');
+  let url = document.getElementById('specialtyTeamsUrl').value.trim();
+  if (!url) { statusEl.textContent = 'Paste a media kit PDF link first.'; return; }
+  // Strip a PDF-viewer extension wrapper if the person pasted the browser address bar URL directly
+  const wrapperMatch = url.match(/^chrome-extension:\/\/[^/]+\/(https?:\/\/.+)$/i);
+  if (wrapperMatch) url = wrapperMatch[1];
+  statusEl.textContent = 'Fetching and parsing PDF…';
+  let result;
+  try {
+    const res = await fetch('/api/fetch-specialty-teams', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url })
+    });
+    result = await res.json();
+  } catch (err) {
+    statusEl.textContent = 'Could not reach the server to fetch that PDF.';
+    return;
+  }
+  try {
+    if (result.error) { statusEl.textContent = result.error; return; }
+    const opponentTyped = document.getElementById('boardOpponentName').textContent;
+    const oppPP = findSpecialtyTeamRow(result.pp, opponentTyped);
+    const oppPK = findSpecialtyTeamRow(result.pk, opponentTyped);
+    const ottPP = result.pp.find(r => /67/.test(r.team));
+    const ottPK = result.pk.find(r => /67/.test(r.team));
+    const filled = [];
+    if (oppPP) { document.getElementById('awayPP').textContent = formatPP(oppPP); document.getElementById('awayPPRank').textContent = '#' + oppPP.rank; filled.push('Opponent PP'); }
+    if (oppPK) { document.getElementById('awayPK').textContent = formatPK(oppPK); document.getElementById('awayPKRank').textContent = '#' + oppPK.rank; filled.push('Opponent PK'); }
+    if (ottPP) { document.getElementById('homePP').textContent = formatPP(ottPP); document.getElementById('homePPRank').textContent = '#' + ottPP.rank; filled.push("Ottawa PP"); }
+    if (ottPK) { document.getElementById('homePK').textContent = formatPK(ottPK); document.getElementById('homePKRank').textContent = '#' + ottPK.rank; filled.push("Ottawa PK"); }
+    if (filled.length === 0) {
+      statusEl.textContent = 'Found the Specialty Team Records section, but couldn\'t match the opponent name — check the Opponent field above and try again.';
+    } else {
+      statusEl.textContent = 'Filled in: ' + filled.join(', ') + (oppPP || oppPK ? '' : ' (opponent not matched — check the Opponent name field)');
+    }
+  } catch (err) {
+    statusEl.textContent = 'Got a response but could not apply it — please try again.';
+  }
+});
+
+
 function wireLogoUpload(side) {
   const key = side + 'Logo'; // 'awayLogo' | 'homeLogo'
   const input = document.getElementById(side + 'LogoInput');
