@@ -917,7 +917,8 @@ function foPct(fow, fol) { const tot = fow + fol; return tot > 0 ? ((fow / tot) 
 function renderSkaterRows(rows) {
   const body = document.getElementById('p_statsBody');
   if (rows.length === 0) { body.innerHTML = '<tr><td colspan="13" style="color:var(--sub);">No skater stats yet. Paste a gamesheet above and Parse, or add rows manually.</td></tr>'; return; }
-  body.innerHTML = rows.map((r, i) => `
+  const sorted = rows.slice().sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0) || (Number(b.goals) || 0) - (Number(a.goals) || 0));
+  body.innerHTML = sorted.map((r, i) => `
     <tr data-idx="${i}">
       <td contenteditable="true" data-field="name">${r.name || ''}</td>
       <td contenteditable="true" data-field="pos">${r.pos || ''}</td>

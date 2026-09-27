@@ -139,7 +139,7 @@ app.get('/api/player-stats-season', (req, res) => {
       SUM(fol) as fol
     FROM skater_stats
     GROUP BY name
-    ORDER BY points DESC, goals DESC
+    ORDER BY points DESC, goals DESC, assists DESC, name ASC
   `).all();
   res.json(rows);
 });
