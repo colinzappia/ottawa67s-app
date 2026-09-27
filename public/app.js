@@ -81,6 +81,40 @@ function wirePhotoUpload(team) {
 wirePhotoUpload('away');
 wirePhotoUpload('home');
 
+function wireCombinedPhotoUpload() {
+  const input = document.getElementById('combinedPhotoInput');
+  const removeBtn = document.getElementById('combinedPhotoRemove');
+  input.addEventListener('change', function () {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async function (e) {
+      const dataUrl = e.target.result;
+      applyPhoto('away', dataUrl);
+      applyPhoto('home', dataUrl);
+      try {
+        await Promise.all([
+          api('/api/photos/away', { method: 'PUT', body: JSON.stringify({ dataurl: dataUrl }) }),
+          api('/api/photos/home', { method: 'PUT', body: JSON.stringify({ dataurl: dataUrl }) })
+        ]);
+      } catch (err) { alert('Could not save the combined file to the server.'); }
+    };
+    reader.readAsDataURL(file);
+  });
+  removeBtn.addEventListener('click', async function () {
+    applyPhoto('away', null);
+    applyPhoto('home', null);
+    input.value = '';
+    try {
+      await Promise.all([
+        api('/api/photos/away', { method: 'DELETE' }),
+        api('/api/photos/home', { method: 'DELETE' })
+      ]);
+    } catch (e) {}
+  });
+}
+wireCombinedPhotoUpload();
+
 function wireLogoUpload(side) {
   const key = side + 'Logo'; // 'awayLogo' | 'homeLogo'
   const input = document.getElementById(side + 'LogoInput');
