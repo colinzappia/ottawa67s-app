@@ -142,7 +142,31 @@ document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', asyn
     return;
   }
   try {
-    if (result.error) { statusEl.textContent = result.error; return; }
+    if (result.error) {
+      statusEl.textContent = result.error;
+      const existingBox = document.getElementById('specialtyTeamsDebug');
+      if (existingBox) existingBox.remove();
+      const existingNote = document.getElementById('specialtyTeamsDebugNote');
+      if (existingNote) existingNote.remove();
+      if (result.debugExcerpt) {
+        const box = document.createElement('textarea');
+        box.id = 'specialtyTeamsDebug';
+        box.readOnly = true;
+        box.style.width = '100%';
+        box.style.height = '160px';
+        box.style.fontFamily = 'monospace';
+        box.style.fontSize = '10px';
+        box.style.marginTop = '6px';
+        box.value = result.debugExcerpt;
+        statusEl.parentNode.appendChild(box);
+        const note = document.createElement('div');
+        note.id = 'specialtyTeamsDebugNote';
+        note.className = 'hint';
+        note.textContent = 'Copy the text above and send it back so the parser can be fixed to match this PDF\'s actual layout.';
+        statusEl.parentNode.appendChild(note);
+      }
+      return;
+    }
     const opponentTyped = document.getElementById('boardOpponentName').textContent;
     const oppPP = findSpecialtyTeamRow(result.pp, opponentTyped);
     const oppPK = findSpecialtyTeamRow(result.pk, opponentTyped);

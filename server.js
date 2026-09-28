@@ -254,24 +254,116 @@ app.delete('/api/photos/:team', (req, res) => {
 
 /* ============== MEDIA KIT PDF — SPECIALTY TEAMS ============== */
 
-function parseSpecialtyTeamsFromText(fullText) {
-  const lines = fullText.split('\n').map(l => l.trim()).filter(Boolean);
-  let mode = null;
-  const pp = [], pk = [];
-  const rowRe = /^(\d+)\s+(.+?)\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+\.\d+)\s+(\d+)\s*$/;
-  for (const line of lines) {
-    if (/^Team Power Play$/i.test(line)) { mode = 'PP'; continue; }
-    if (/^Team Penalty Kill$/i.test(line)) { mode = 'PK'; continue; }
-    if (/^Team Overtime Performance$/i.test(line)) { mode = null; continue; }
-    if (mode) {
-      const m = line.match(rowRe);
-      if (m) {
-        const rank = parseInt(m[1]), team = m[2].trim(), gp = parseInt(m[3]);
-        const col2 = parseInt(m[4]), col3 = parseInt(m[5]), pct = parseFloat(m[6]), col5 = parseInt(m[7]);
-        if (mode === 'PP') pp.push({ rank, team, gp, adv: col2, gf: col3, ppPct: pct, shga: col5 });
-        else pk.push({ rank, team, gp, tsh: col2, ppga: col3, pkPct: pct, shgf: col5 });
+// ---- Parsing the "Specialty Team Records" tables ----
+// PDF text extractors format tables differently. Two layouts are handled and whichever yields more rows wins:
+//   (a) cells separated by whitespace/newlines (clean text)
+//   (b) cells jammed together with no separators, e.g. "2Ottawa 67's25240.00" (what pdf-parse actually produces)
+// Every row is: rank, team name, GP, two counts, a percentage, and a final count.
+
+function makeSpecialtyRow(kind, rank, team, gp, c2, c3, pct, c5) {
+  return kind === 'PP'
+    ? { rank, team, gp, adv: c2, gf: c3, ppPct: pct, shga: c5 }
+    : { rank, team, gp, tsh: c2, ppga: c3, pkPct: pct, shgf: c5 };
+}
+
+// (a) whitespace-separated
+function parseSpecialtyRowsSpaced(sectionText, kind) {
+  const tokens = sectionText.split(/\s+/).filter(Boolean);
+  const isInt = t => /^\d+$/.test(t);
+  const isPct = t => /^\d+(\.\d+)?$/.test(t);
+  let i = 0;
+  while (i < tokens.length && !isInt(tokens[i])) i++;
+  const rows = [];
+  while (i < tokens.length && isInt(tokens[i])) {
+    const rank = parseInt(tokens[i]); i++;
+    const nameTokens = [];
+    while (i < tokens.length && !isInt(tokens[i])) { nameTokens.push(tokens[i]); i++; }
+    if (nameTokens.length === 0) break;
+    const t = tokens.slice(i, i + 5);
+    if (t.length < 5 || !isInt(t[0]) || !isInt(t[1]) || !isInt(t[2]) || !isPct(t[3]) || !isInt(t[4])) break;
+    rows.push(makeSpecialtyRow(kind, rank, nameTokens.join(' '), parseInt(t[0]), parseInt(t[1]), parseInt(t[2]), parseFloat(t[3]), parseInt(t[4])));
+    i += 5;
+  }
+  return rows;
+}
+
+// Does (c2, c3, pct) agree with the arithmetic that defines the percentage?
+function specialtyNumbersConsistent(kind, c2, c3, pct) {
+  if (c3 > c2) return false;
+  if (pct < 0 || pct > 100) return false;
+  if (c2 === 0) return c3 === 0;
+  const expected = kind === 'PP' ? (c3 / c2) * 100 : ((c2 - c3) / c2) * 100;
+  return Math.abs(expected - pct) <= 0.06;
+}
+
+// Every way of cutting a digit string into [gp, c2, c3, pctInt] that is arithmetically consistent.
+function splitSpecialtyDigits(kind, digits, decDigit) {
+  const results = [];
+  const ok = s => s.length > 0 && (s === '0' || s[0] !== '0');
+  for (let a = 1; a <= 2 && a < digits.length; a++) {
+    for (let b = 1; b <= 3 && a + b < digits.length; b++) {
+      for (let c = 1; c <= 3 && a + b + c < digits.length; c++) {
+        const gpS = digits.slice(0, a), c2S = digits.slice(a, a + b), c3S = digits.slice(a + b, a + b + c), pS = digits.slice(a + b + c);
+        if (pS.length < 1 || pS.length > 3) continue;
+        if (!ok(gpS) || !ok(c2S) || !ok(c3S) || !ok(pS)) continue;
+        const gp = parseInt(gpS), c2 = parseInt(c2S), c3 = parseInt(c3S), pct = parseFloat(pS + '.' + decDigit);
+        if (gp < 1 || gp > 99) continue;
+        if (specialtyNumbersConsistent(kind, c2, c3, pct)) results.push({ gp, c2, c3, pct });
       }
     }
+  }
+  return results;
+}
+
+// (b) cells jammed together, one row per line
+function parseSpecialtyRowsJammed(sectionText, kind) {
+  const candidates = []; // per row: { rank, team, options: [{gp,c2,c3,pct}], c5 }
+  for (const rawLine of sectionText.split('\n')) {
+    const line = rawLine.trim();
+    const m = line.match(/^(\d{1,2})(\D.*?)(\d+)\.(\d+)$/);
+    if (!m) continue;
+    const rank = parseInt(m[1]), team = m[2].trim();
+    const digitsBefore = m[3], afterDot = m[4];
+    if (afterDot.length < 2 || team.length === 0) continue; // need a 1-digit pct decimal plus at least one digit for the last column
+    const decDigit = afterDot[0], c5 = parseInt(afterDot.slice(1));
+    const options = splitSpecialtyDigits(kind, digitsBefore, decDigit);
+    if (options.length === 0) continue;
+    candidates.push({ rank, team, options, c5 });
+  }
+  // Rows with exactly one valid reading anchor what a typical games-played value looks like;
+  // use it to settle any row that could be read more than one way.
+  const anchored = candidates.filter(c => c.options.length === 1).map(c => c.options[0].gp).sort((x, y) => x - y);
+  const medianGp = anchored.length ? anchored[Math.floor(anchored.length / 2)] : null;
+  return candidates.map(c => {
+    let pick = c.options[0];
+    if (c.options.length > 1 && medianGp !== null) {
+      pick = c.options.slice().sort((x, y) => Math.abs(x.gp - medianGp) - Math.abs(y.gp - medianGp))[0];
+    }
+    return makeSpecialtyRow(kind, c.rank, c.team, pick.gp, pick.c2, pick.c3, pick.pct, c.c5);
+  });
+}
+
+function parseSpecialtyRows(sectionText, kind) {
+  const spaced = parseSpecialtyRowsSpaced(sectionText, kind);
+  const jammed = parseSpecialtyRowsJammed(sectionText, kind);
+  return jammed.length > spaced.length ? jammed : spaced;
+}
+
+function parseSpecialtyTeamsFromText(fullText) {
+  const specIdx = fullText.search(/Specialty\s*Team\s*Records/i);
+  const base = specIdx >= 0 ? fullText.slice(specIdx) : fullText;
+  const ppMatch = base.match(/Team\s*Power\s*Play/i);
+  const pkMatch = base.match(/Team\s*Penalty\s*Kill/i);
+  let pp = [], pk = [];
+  if (ppMatch) {
+    const ppStart = ppMatch.index + ppMatch[0].length;
+    const ppEnd = (pkMatch && pkMatch.index > ppStart) ? pkMatch.index : base.length;
+    pp = parseSpecialtyRows(base.slice(ppStart, ppEnd), 'PP');
+  }
+  if (pkMatch) {
+    const pkStart = pkMatch.index + pkMatch[0].length;
+    const otMatch = base.slice(pkStart).match(/Team\s*Overtime/i);
+    pk = parseSpecialtyRows(base.slice(pkStart, otMatch ? pkStart + otMatch.index : undefined), 'PK');
   }
   return { pp, pk };
 }
@@ -285,12 +377,33 @@ app.post('/api/fetch-specialty-teams', async (req, res) => {
     });
     if (!pdfRes.ok) return res.status(502).json({ error: 'Could not download the PDF (status ' + pdfRes.status + ').' });
     const buffer = Buffer.from(await pdfRes.arrayBuffer());
-    const parsed = await pdfParse(buffer);
-    const { pp, pk } = parseSpecialtyTeamsFromText(parsed.text);
-    if (pp.length === 0 && pk.length === 0) {
-      return res.status(422).json({ error: 'Downloaded the PDF but could not find a "Specialty Team Records" section in it — the layout may not match what this parser expects.' });
+
+    // pdf-parse bundles several PDF-reading engines. Each has quirks — one may fail outright on a file
+    // another reads fine, or lay out table text differently — so try them in turn until one yields the tables.
+    const engines = [undefined, 'v2.0.550', 'v1.10.88', 'v1.9.426'];
+    let firstText = null, lastError = null;
+    for (const version of engines) {
+      try {
+        const parsed = await pdfParse(buffer, version ? { version } : undefined);
+        if (firstText === null) firstText = parsed.text;
+        const { pp, pk } = parseSpecialtyTeamsFromText(parsed.text);
+        if (pp.length > 0 || pk.length > 0) return res.json({ pp, pk });
+      } catch (e) {
+        lastError = e;
+      }
     }
-    res.json({ pp, pk });
+
+    if (firstText === null) {
+      return res.status(500).json({ error: 'Downloaded the file but could not read it as a PDF: ' + (lastError ? lastError.message : 'unknown error') });
+    }
+    const idx = firstText.search(/specialty/i);
+    const debugExcerpt = idx >= 0
+      ? firstText.slice(Math.max(0, idx - 100), idx + 2000)
+      : '(the word "Specialty" was not found anywhere in the extracted text — showing the first 1500 characters instead)\n\n' + firstText.slice(0, 1500);
+    return res.status(422).json({
+      error: 'Downloaded the PDF but could not find a "Specialty Team Records" section in it — the layout may not match what this parser expects.',
+      debugExcerpt
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch or parse the PDF: ' + err.message });
   }
