@@ -98,6 +98,12 @@ function wireCombinedPhotoUpload() {
           api('/api/photos/home', { method: 'PUT', body: JSON.stringify({ dataurl: dataUrl }) })
         ]);
       } catch (err) { alert('Could not save the combined file to the server.'); }
+      if (dataUrl.startsWith('data:application/pdf')) {
+        runLineupsRequest('/api/parse-lineups', { dataurl: dataUrl });
+      } else {
+        clearLineupsDebug();
+        document.getElementById('lineupsStatus').textContent = "Picture uploaded and displayed. Pictures can't be read automatically — paste the league lineup PDF link, or upload the PDF itself, to fill in the lines.";
+      }
     };
     reader.readAsDataURL(file);
   });
@@ -114,6 +120,109 @@ function wireCombinedPhotoUpload() {
   });
 }
 wireCombinedPhotoUpload();
+
+/* ===================== GAME LINEUPS (league PDF) ===================== */
+function lineupPlayerText(p) { return p ? '#' + p.number + ' ' + p.name : null; }
+
+// Writes one team's lines, D pairs and goalies into its panel; returns notes about anything the board has no slot for.
+function fillTeamPanelFromLineup(panel, team) {
+  const notes = [];
+  const setSlot = (el, player, placeholder) => { if (el) el.textContent = player ? lineupPlayerText(player) : placeholder; };
+  panel.querySelectorAll(':scope > .line-row').forEach((row, i) => {
+    const s = row.querySelectorAll('span[contenteditable]');
+    const line = team.forwards[i] || {};
+    setSlot(s[0], line.lw, 'LW'); setSlot(s[1], line.c, 'C'); setSlot(s[2], line.rw, 'RW');
+  });
+  panel.querySelectorAll('.dpairs .line-row').forEach((row, i) => {
+    const s = row.querySelectorAll('span[contenteditable]');
+    const pair = team.defense[i] || {};
+    setSlot(s[0], pair.ld, 'LD'); setSlot(s[1], pair.rd, 'RD');
+  });
+  const g = panel.querySelectorAll('.goalies .line-row');
+  if (g[0]) setSlot(g[0].querySelector('span[contenteditable]'), team.goalies.starter, 'Starter');
+  if (g[1]) setSlot(g[1].querySelector('span[contenteditable]'), team.goalies.backup, 'Backup');
+  const f5 = team.forwards[4];
+  if (f5 && (f5.lw || f5.c || f5.rw)) notes.push('a 5th forward line');
+  const d4 = team.defense[3];
+  if (d4 && (d4.ld || d4.rd)) notes.push('a 4th defense pair');
+  return notes;
+}
+
+function fillBoardFromLineups(data) {
+  const ott = data.teams.find(t => t.isOttawa);
+  const opp = data.teams.find(t => !t.isOttawa);
+  if (!ott || !opp) return { error: "Read the file, but couldn't tell which team is Ottawa." };
+  const notes = [];
+  fillTeamPanelFromLineup(document.querySelector('.team-panel.away'), opp).forEach(n => notes.push(opp.name + ' has ' + n + ' that the board has no slot for'));
+  fillTeamPanelFromLineup(document.querySelector('.team-panel.home'), ott).forEach(n => notes.push(ott.name + ' has ' + n + ' that the board has no slot for'));
+
+  document.getElementById('boardOpponentName').textContent = opp.name;
+  const oppHeader = document.querySelector('.team-panel.away .team-header span[contenteditable]');
+  if (oppHeader) oppHeader.textContent = opp.name.toUpperCase();
+
+  if (data.game && data.game.date) {
+    const [y, m, d] = data.game.date.split('-').map(Number);
+    document.getElementById('boardDate').textContent = new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  if (data.game && data.game.gameType) document.getElementById('boardGameType').value = data.game.gameType;
+
+  const list = arr => arr.map(p => '#' + p.number + ' ' + p.name).join(', ');
+  document.getElementById('boardScratchesOpp').textContent = opp.scratches.length ? list(opp.scratches) : 'None';
+  document.getElementById('boardScratchesOtt').textContent = ott.scratches.length ? list(ott.scratches) : 'None';
+  if (data.officials && data.officials.referees.length) document.getElementById('boardReferees').textContent = list(data.officials.referees);
+  if (data.officials && data.officials.linesmen.length) document.getElementById('boardLinesmen').textContent = list(data.officials.linesmen);
+  return { opp, ott, notes };
+}
+
+function clearLineupsDebug() {
+  const box = document.getElementById('lineupsDebug'); if (box) box.remove();
+  const note = document.getElementById('lineupsDebugNote'); if (note) note.remove();
+}
+function showLineupsDebug(statusEl, text) {
+  clearLineupsDebug();
+  if (!text) return;
+  const box = document.createElement('textarea');
+  box.id = 'lineupsDebug';
+  box.readOnly = true;
+  box.style.cssText = 'width:100%;height:180px;font-family:monospace;font-size:10px;margin-top:6px;';
+  box.value = text;
+  statusEl.parentNode.appendChild(box);
+  const note = document.createElement('div');
+  note.id = 'lineupsDebugNote';
+  note.className = 'hint';
+  note.textContent = "Copy the text above and send it back so the reader can be fixed to match this PDF's actual layout.";
+  statusEl.parentNode.appendChild(note);
+}
+
+async function runLineupsRequest(path, payload) {
+  const statusEl = document.getElementById('lineupsStatus');
+  clearLineupsDebug();
+  statusEl.textContent = 'Reading the lineup PDF…';
+  let result;
+  try {
+    const res = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    result = await res.json();
+  } catch (err) {
+    statusEl.textContent = 'Could not reach the server to read that file.';
+    return;
+  }
+  if (result.error) { statusEl.textContent = result.error; showLineupsDebug(statusEl, result.debugExcerpt); return; }
+  let filled;
+  try { filled = fillBoardFromLineups(result); }
+  catch (err) { statusEl.textContent = 'Read the file but could not place it on the board — please try again.'; return; }
+  if (filled.error) { statusEl.textContent = filled.error; return; }
+  statusEl.textContent = 'Filled in the lineups for ' + filled.opp.name + ' and ' + filled.ott.name +
+    ', plus scratches, officials and the date.' + (filled.notes.length ? ' Note: ' + filled.notes.join('; ') + '.' : '');
+}
+
+document.getElementById('lineupsFetchBtn').addEventListener('click', () => {
+  const statusEl = document.getElementById('lineupsStatus');
+  let url = document.getElementById('lineupsUrl').value.trim();
+  if (!url) { statusEl.textContent = 'Paste the lineup PDF link first.'; return; }
+  const wrapper = url.match(/^chrome-extension:\/\/[^/]+\/(https?:\/\/.+)$/i);   // the browser's PDF viewer wraps the real link
+  if (wrapper) url = wrapper[1];
+  runLineupsRequest('/api/fetch-lineups', { url });
+});
 
 function findSpecialtyTeamRow(rows, typedName) {
   const typed = (typedName || '').trim().toLowerCase();

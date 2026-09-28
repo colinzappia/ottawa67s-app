@@ -409,6 +409,297 @@ app.post('/api/fetch-specialty-teams', async (req, res) => {
   }
 });
 
+/* ============== GAME LINEUPS PDF ============== */
+// The league publishes a per-game lineup PDF: both rosters, forward lines and D pairs written as jersey
+// numbers only, the starting goalie, scratches, and the on-ice officials. This reads it and resolves every
+// number to a full name so the spotting board can be filled in automatically.
+
+// Rebuild text from a PDF page using each piece of text's position, so table cells stay properly
+// separated. (pdf-parse's default output glues cells in the same row together with no gaps at all.)
+function lineupLayoutText(items) {
+  const rows = [];
+  for (const it of items) {
+    if (!it.str || !it.str.trim()) continue;
+    const x = it.transform[4], y = it.transform[5];
+    let row = rows.find(r => Math.abs(r.y - y) <= 1.5);
+    if (!row) { row = { y, items: [] }; rows.push(row); }
+    row.items.push({ x, w: it.width || 0, str: it.str });
+  }
+  rows.sort((a, b) => b.y - a.y);
+  return rows.map(r => {
+    r.items.sort((a, b) => a.x - b.x);
+    let out = '', prevEnd = null;
+    for (const it of r.items) {
+      if (prevEnd !== null && it.x - prevEnd > 1.0) out += ' ';
+      out += it.str;
+      prevEnd = it.x + it.w;
+    }
+    return out;
+  }).join('\n');
+}
+function lineupLayoutRender(pageData) {
+  return pageData.getTextContent({ normalizeWhitespace: false, disableCombineTextItems: false })
+    .then(tc => lineupLayoutText(tc.items));
+}
+
+function lineupTitleCase(s) {
+  return (s || '').replace(/\s+/g, ' ').trim().split(' ')
+    .map(w => (w.length > 1 && w === w.toUpperCase() && /[A-Z]/.test(w)) ? w[0] + w.slice(1).toLowerCase() : w).join(' ');
+}
+
+// "Van Volsen, Jack A" -> "Jack Van Volsen". The trailing C / A is a captain / assistant marker, not part of the name;
+// depending on the extractor it arrives either as " A" or glued straight onto the name ("JackA").
+function lineupFullName(raw) {
+  let s = (raw || '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/\s+[CA]$/, '').replace(/([a-z])[CA]$/, '$1');
+  const m = s.match(/^(.+?),\s*(.+)$/);
+  return m ? (m[2].trim() + ' ' + m[1].trim()) : s;
+}
+
+// Cut a run of digits into `count` jersey numbers that all exist on the roster (no repeats).
+function lineupSplitNumbers(digits, count, valid) {
+  let found = null;
+  (function go(pos, k, acc) {
+    if (found) return;
+    if (k === count) { if (pos === digits.length) found = acc.slice(); return; }
+    for (let len = 2; len >= 1; len--) {
+      const part = digits.slice(pos, pos + len);
+      if (part.length !== len || (len > 1 && part[0] === '0')) continue;
+      const n = parseInt(part, 10);
+      if (!valid.has(n) || acc.includes(n)) continue;
+      acc.push(n); go(pos + len, k + 1, acc); acc.pop();
+    }
+  })(0, 0, []);
+  return found;
+}
+
+// A forward line: "14 11 55" (or jammed "141155") -> [14, 11, 55]
+function lineupDecodeLine(str, valid) {
+  const t = (str || '').trim();
+  if (!t) return [];
+  const tokens = t.split(/\s+/);
+  if (tokens.every(x => /^\d{1,2}$/.test(x)) && tokens.every(x => valid.has(parseInt(x, 10)))) return tokens.map(x => parseInt(x, 10));
+  const digits = t.replace(/\D/g, '');
+  for (const cnt of [3, 2, 1]) {
+    const sol = lineupSplitNumbers(digits, cnt, valid);
+    if (sol) return sol;
+  }
+  return [];
+}
+
+// The defense block reads "Def 1 6 41 ... Def 2 2 18 ... Def 3 43 15 ... Def 4" with the goalie column mixed in
+// ("Starting", "# 34"). Drop the goalie bits and every letter, and what's left is the labels 1..4, each followed by
+// zero or two jersey numbers — which can be decoded reliably however the extractor spaced or garbled the text.
+function lineupDecodeDefense(sectionText, valid) {
+  const s = (sectionText || '').replace(/#\s*\d+/g, ' ').replace(/Starting|Substitute/gi, ' ');
+  const digits = s.replace(/\D/g, '');
+  let solution = null;
+  (function go(pos, j, acc) {
+    if (solution) return;
+    if (j > 4) { if (pos === digits.length) solution = acc.slice(); return; }
+    if (pos >= digits.length) { go(pos, j + 1, acc.concat([[null, null]])); return; }
+    if (digits[pos] !== String(j)) return;
+    const p = pos + 1;
+    for (let l1 = 2; l1 >= 1; l1--) {
+      for (let l2 = 2; l2 >= 1; l2--) {
+        const a = digits.slice(p, p + l1), b = digits.slice(p + l1, p + l1 + l2);
+        if (a.length !== l1 || b.length !== l2 || a[0] === '0' || b[0] === '0') continue;
+        const ld = parseInt(a, 10), rd = parseInt(b, 10);
+        if (valid.has(ld) && valid.has(rd) && ld !== rd) go(p + l1 + l2, j + 1, acc.concat([[ld, rd]]));
+      }
+    }
+    go(p, j + 1, acc.concat([[null, null]]));
+  })(0, 1, []);
+  return solution || [[null, null], [null, null], [null, null], [null, null]];
+}
+
+function parseLineupTeamBlock(block) {
+  const lines = block.split('\n').map(l => l.replace(/\t/g, ' ').trim()).filter(Boolean);
+  const text = lines.join('\n');
+  // team name: whatever follows the VIS / HOM marker (same line, or the next line)
+  const markerLine = lines[0] || '';
+  let rawName = markerLine.replace(/^(VIS|HOM)/, '').trim();
+  if (!rawName) rawName = lines[1] || '';
+  const name = lineupTitleCase(rawName);
+
+  // roster: everything between the column header and the "Forwards lines" heading
+  const rosterStart = text.search(/Roster\s*Status/i);
+  const fwdHeading = text.search(/Forwards?\s*lines/i);
+  const rosterText = text.slice(rosterStart >= 0 ? rosterStart : 0, fwdHeading >= 0 ? fwdHeading : undefined);
+  const rosterLines = rosterText.split('\n').map(l => l.trim()).filter(Boolean);
+  const skaters = [], goalies = [];
+  let k = 1;
+  for (const l of rosterLines) {
+    let m = l.match(/^(GB|GK)\s*(\d{1,2})\s*([A-Za-z].*)$/);
+    if (m) { goalies.push({ status: m[1], number: parseInt(m[2], 10), name: lineupFullName(m[3]) }); continue; }
+    const idx = String(k);
+    if (l.startsWith(idx)) {
+      m = l.slice(idx.length).trim().match(/^(\d{1,2})\s*([A-Za-z].*)$/);
+      if (m) { skaters.push({ number: parseInt(m[1], 10), name: lineupFullName(m[2]) }); k++; continue; }
+    }
+    m = l.match(/^\d{1,2}\s+(\d{1,2})\s+([A-Za-z].*)$/);
+    if (m) { skaters.push({ number: parseInt(m[1], 10), name: lineupFullName(m[2]) }); k++; }
+  }
+  const byNumber = {};
+  skaters.concat(goalies).forEach(p => { byNumber[p.number] = { number: p.number, name: p.name }; });
+  const valid = new Set(Object.keys(byNumber).map(n => parseInt(n, 10)));
+  const who = n => (n === null || n === undefined) ? null : (byNumber[n] || null);
+
+  // forward lines
+  const fwdEnd = text.search(/LD\s*RD\s*GK/i);
+  const fwdText = text.slice(fwdHeading >= 0 ? fwdHeading : 0, fwdEnd >= 0 ? fwdEnd : undefined);
+  const forwards = [];
+  for (const l of fwdText.split('\n')) {
+    const m = l.trim().match(/^Line\s*(\d)(.*)$/i);
+    if (!m) continue;
+    const nums = lineupDecodeLine(m[2], valid);
+    forwards[parseInt(m[1], 10) - 1] = { lw: who(nums[0]), c: who(nums[1]), rw: who(nums[2]) };
+  }
+  for (let i = 0; i < 5; i++) if (!forwards[i]) forwards[i] = { lw: null, c: null, rw: null };
+
+  // defense pairs + goalie designation
+  const defStart = fwdEnd;
+  let defText = '';
+  if (defStart >= 0) {
+    const rest = text.slice(defStart);
+    const stop = rest.search(/(The\s+\d+\w*\s+player|Scratches)/i);
+    defText = stop >= 0 ? rest.slice(0, stop) : rest;
+  }
+  const defense = lineupDecodeDefense(defText, valid).map(([ld, rd]) => ({ ld: who(ld), rd: who(rd) }));
+  const goalieNums = new Set(goalies.map(g => g.number));
+  const st = defText.match(/Starting[\s\S]*?#\s*(\d+)/i), sb = defText.match(/Substitute[\s\S]*?#\s*(\d+)/i);
+  let starterNum = st ? parseInt(st[1], 10) : null;
+  let backupNum = sb ? parseInt(sb[1], 10) : null;
+  const gb = goalies.find(g => g.status === 'GB');
+  if (gb && starterNum !== gb.number) starterNum = gb.number;      // roster's explicit flag wins on any disagreement
+  if (starterNum === null || !goalieNums.has(starterNum)) starterNum = goalies.length ? goalies[0].number : null;
+  if (backupNum === null || !goalieNums.has(backupNum) || backupNum === starterNum) {
+    const other = goalies.find(g => g.number !== starterNum);
+    backupNum = other ? other.number : null;
+  }
+
+  // scratches
+  const scStart = text.search(/Scratches/i);
+  let scratches = [];
+  if (scStart >= 0) {
+    const rest = text.slice(scStart);
+    const stop = rest.search(/Hockey\s*Staff/i);
+    const sect = stop >= 0 ? rest.slice(0, stop) : rest;
+    const re = /#\s*(\d{1,2})\s*([A-Za-z][^#\n]*)/g;
+    let m;
+    while ((m = re.exec(sect)) !== null) scratches.push({ number: parseInt(m[1], 10), name: lineupFullName(m[2]) });
+  }
+
+  return {
+    name, isOttawa: /ottawa|67/i.test(name),
+    rosterCount: skaters.length + goalies.length,
+    forwards, defense,
+    goalies: { starter: who(starterNum), backup: who(backupNum) },
+    scratches
+  };
+}
+
+function parseLineupText(fullText) {
+  const text = (fullText || '').replace(/\r/g, '');
+  const officialsIdx = text.search(/ON-ICE\s*OFFICIALS/i);
+  const markerRe = /(?:^|\n)[ \t]*(VIS|HOM)(?![a-z])/g;
+  const marks = [];
+  let mm;
+  while ((mm = markerRe.exec(text)) !== null) marks.push({ side: mm[1], pos: mm.index + (mm[0].startsWith('\n') ? 1 : 0) });
+  if (marks.length < 2) return { ok: false, reason: 'Could not find both team sections (VIS / HOM).' };
+  marks.sort((a, b) => a.pos - b.pos);
+  const end = officialsIdx > marks[1].pos ? officialsIdx : text.length;
+  const header = text.slice(0, marks[0].pos);
+  const teams = [
+    { side: marks[0].side, ...parseLineupTeamBlock(text.slice(marks[0].pos, marks[1].pos)) },
+    { side: marks[1].side, ...parseLineupTeamBlock(text.slice(marks[1].pos, end)) }
+  ];
+
+  const dm = header.match(/DATE\s*(\d{4}-\d{2}-\d{2})/i);
+  const am = header.match(/ARENA\s*([^\n]+)/i);
+  let gameType = null;
+  if (/\bPlay/i.test(header)) gameType = 'Playoffs';
+  else if (/\bPre\b|Pre-?season/i.test(header)) gameType = 'Preseason';
+  else if (/\bReg\b/i.test(header)) gameType = 'Regular Season';
+  const game = { date: dm ? dm[1] : null, arena: am ? am[1].trim() : null, gameType };
+
+  const officials = { referees: [], linesmen: [] };
+  if (officialsIdx >= 0) {
+    const off = text.slice(officialsIdx);
+    const lm = off.search(/LINESMEN/i);
+    const refText = lm >= 0 ? off.slice(0, lm) : off;
+    const linText = lm >= 0 ? off.slice(lm) : '';
+    const grab = (t, arr) => {
+      for (const l of t.split('\n')) {
+        const m = l.replace(/\t/g, ' ').trim().match(/^(\d{1,3})\s*([A-Za-z][A-Za-z ,.'\-]*)$/);
+        if (m) arr.push({ number: parseInt(m[1], 10), name: lineupFullName(m[2]) });
+      }
+    };
+    grab(refText, officials.referees);
+    grab(linText, officials.linesmen);
+  }
+
+  const usable = teams.every(t => t.rosterCount >= 10 && t.forwards.filter(f => f.lw || f.c || f.rw).length >= 2);
+  if (!usable) return { ok: false, reason: 'Found the team sections but could not read enough of the rosters and lines.', teams, game, officials };
+  return { ok: true, game, teams, officials };
+}
+
+// Try each combination of layout-aware / default text and PDF engine until one reads cleanly.
+async function extractLineupsFromBuffer(buffer) {
+  const attempts = [
+    { version: undefined, layout: true }, { version: undefined, layout: false },
+    { version: 'v2.0.550', layout: true }, { version: 'v2.0.550', layout: false },
+    { version: 'v1.10.88', layout: true }
+  ];
+  let firstLayout = null, firstDefault = null, lastError = null, lastReason = null;
+  for (const a of attempts) {
+    try {
+      const opts = {};
+      if (a.version) opts.version = a.version;
+      if (a.layout) opts.pagerender = lineupLayoutRender;
+      const parsed = await pdfParse(buffer, opts);
+      if (a.layout && firstLayout === null) firstLayout = parsed.text;
+      if (!a.layout && firstDefault === null) firstDefault = parsed.text;
+      const r = parseLineupText(parsed.text);
+      if (r.ok) return { result: r };
+      lastReason = r.reason;
+    } catch (e) { lastError = e; }
+  }
+  if (firstLayout === null && firstDefault === null) {
+    return { error: 'Could not read that file as a PDF: ' + (lastError ? lastError.message : 'unknown error'), status: 500 };
+  }
+  const debugExcerpt = '--- text as laid out by position ---\n' + (firstLayout || '(unavailable)').slice(0, 2600) +
+    '\n\n--- text as the PDF reader normally returns it ---\n' + (firstDefault || '(unavailable)').slice(0, 1800);
+  return { error: 'Read the PDF but could not make sense of the lineup layout' + (lastReason ? ' (' + lastReason + ')' : '') + '.', debugExcerpt, status: 422 };
+}
+
+app.post('/api/fetch-lineups', async (req, res) => {
+  const { url } = req.body;
+  if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'A valid http(s) URL is required.' });
+  try {
+    const pdfRes = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' } });
+    if (!pdfRes.ok) return res.status(502).json({ error: 'Could not download the PDF (status ' + pdfRes.status + ').' });
+    const out = await extractLineupsFromBuffer(Buffer.from(await pdfRes.arrayBuffer()));
+    if (out.error) return res.status(out.status).json({ error: out.error, debugExcerpt: out.debugExcerpt });
+    res.json(out.result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch or read the lineup PDF: ' + err.message });
+  }
+});
+
+app.post('/api/parse-lineups', async (req, res) => {
+  const { dataurl } = req.body;
+  const m = (dataurl || '').match(/^data:application\/pdf;base64,(.+)$/);
+  if (!m) return res.status(400).json({ error: 'Expected a PDF file.' });
+  try {
+    const out = await extractLineupsFromBuffer(Buffer.from(m[1], 'base64'));
+    if (out.error) return res.status(out.status).json({ error: out.error, debugExcerpt: out.debugExcerpt });
+    res.json(out.result);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to read the lineup PDF: ' + err.message });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Ottawa 67's Broadcast Toolkit running on port ${PORT}`);
 });

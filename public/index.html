@@ -41,9 +41,15 @@
   <div class="hint" style="margin-top:-10px;margin-bottom:14px;">Ottawa always sits on the right so their logo stays put game to game — swap the opponent's name and logo on the left each time, regardless of who's actually hosting.</div>
 
   <div class="photo-block no-print" style="border:1px solid var(--line);border-radius:8px;margin-bottom:16px;">
-    <label>Combined Lineups (optional — one file with both teams on it, fills in both panels below)</label>
+    <label>Game Lineups (optional — the league's lineup PDF fills in both teams' lines with numbers and full names, plus scratches, officials and the date)</label>
+    <input type="text" id="lineupsUrl" placeholder="Paste the league game-lineups PDF link here...">
+    <div class="btn-row no-print">
+      <button class="primary small" id="lineupsFetchBtn">Fetch Lineups</button>
+    </div>
+    <label style="margin-top:10px;">Or upload the lineup file (a PDF fills in the lines automatically; a picture is only displayed)</label>
     <input type="file" accept="image/*,application/pdf" id="combinedPhotoInput" class="no-print">
     <div class="btn-row no-print"><button class="small ghost" id="combinedPhotoRemove">Remove From Both</button></div>
+    <div class="hint" id="lineupsStatus"></div>
   </div>
 
   <div class="photo-block no-print" style="border:1px solid var(--line);border-radius:8px;margin-bottom:16px;">
@@ -62,7 +68,7 @@
         <option value="Playoffs">Playoffs</option>
       </select>
     </div>
-    <div class="meta-box"><label>Date</label><div contenteditable="true">Date</div></div>
+    <div class="meta-box"><label>Date</label><div contenteditable="true" id="boardDate">Date</div></div>
     <div class="meta-box"><label>Puck Drop</label><div contenteditable="true">Time</div></div>
     <div class="meta-box"><label>End Time</label><div contenteditable="true">Time</div></div>
     <div class="meta-box"><label>Attendance</label><div contenteditable="true">—</div></div>
@@ -154,10 +160,10 @@
   </div>
 
   <div class="officials">
-    <div class="meta-box"><label>Referees</label><div contenteditable="true">Name, Name</div></div>
-    <div class="meta-box"><label>Linesmen</label><div contenteditable="true">Name, Name</div></div>
-    <div class="meta-box"><label>Scratches (Away)</label><div contenteditable="true">Names</div></div>
-    <div class="meta-box"><label>Scratches (Home)</label><div contenteditable="true">Names</div></div>
+    <div class="meta-box"><label>Referees</label><div contenteditable="true" id="boardReferees">Name, Name</div></div>
+    <div class="meta-box"><label>Linesmen</label><div contenteditable="true" id="boardLinesmen">Name, Name</div></div>
+    <div class="meta-box"><label>Scratches (Opponent)</label><div contenteditable="true" id="boardScratchesOpp">Names</div></div>
+    <div class="meta-box"><label>Scratches (Ottawa 67's)</label><div contenteditable="true" id="boardScratchesOtt">Names</div></div>
   </div>
 </div>
 
