@@ -801,6 +801,32 @@ function parseOfficialReportPenaltyPIM(rawLines) {
   return pimByTeam;
 }
 
+// "POWER PLAY OPPORTUNITIES\nOTTAWA\t1 / 5\nOSHAWA\t0 / 4" — the official report's own team-level PP
+// summary. This is the only source of PP/PK numbers when a game is imported from the report alone
+// (no box score), since the box score's "PP / FOW" table is a separate, box-score-only section.
+function parseOfficialReportPowerPlay(rawLines) {
+  const result = {};
+  const idx = rawLines.findIndex(l => /^POWER PLAY OPPORTUNITIES$/i.test(l.trim()));
+  if (idx === -1) return result;
+  for (let j = idx + 1; j < rawLines.length; j++) {
+    const line = rawLines[j].trim();
+    if (!line) continue;
+    if (/^PENALTY SUMMARY$/i.test(line)) break;
+    const tokens = line.split('\t').map(t => t.trim()).filter(Boolean);
+    let team = null, gf = null, opp = null;
+    if (tokens.length >= 2) {
+      const m = tokens[1].match(/^(\d+)\s*\/\s*(\d+)$/);
+      if (m) { team = tokens[0]; gf = parseInt(m[1]); opp = parseInt(m[2]); }
+    }
+    if (team === null) {
+      const m2 = line.match(/^([A-Z][A-Za-z\s]+?)\s+(\d+)\s*\/\s*(\d+)$/);
+      if (m2) { team = m2[1].trim(); gf = parseInt(m2[2]); opp = parseInt(m2[3]); }
+    }
+    if (team !== null) result[team] = { gf, opportunities: opp };
+  }
+  return result;
+}
+
 function parseOfficialReportGoals(rawLines) {
   const goals = [];
   for (let i = 0; i < rawLines.length; i++) {
@@ -822,7 +848,7 @@ function parseOfficialReportGoals(rawLines) {
         if (!/^(1st|2nd|3rd|OT|SO)/i.test(period)) { j++; continue; }
         const time = tokens[1];
         const strengthRaw = tokens[2] || '';
-        const strength = /SH/i.test(strengthRaw) ? 'SH' : (/PP/i.test(strengthRaw) ? 'PP' : 'EV');
+        const strength = /SH/i.test(strengthRaw) ? 'SH' : (/PP/i.test(strengthRaw) ? 'PP' : (/EN/i.test(strengthRaw) ? 'EN' : (/PS/i.test(strengthRaw) ? 'PS' : 'EV')));
         const gAsNums = (tokens[3] || '').split('-').map(s => s.trim()).filter(Boolean);
         const scorerNum = gAsNums[0] || '';
         const assistNums = gAsNums.slice(1);
@@ -1241,13 +1267,14 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
     oppIdx = ottIdx === 0 ? 1 : 0;
   }
 
-  let reportMeta = null, reportRosters = null, reportGoals = null, reportPim = null, reportOttShort = null, reportOppShort = null, ottSegments = [], ottSpanByName = {};
+  let reportMeta = null, reportRosters = null, reportGoals = null, reportPim = null, reportPP = null, reportOttShort = null, reportOppShort = null, ottSegments = [], ottSpanByName = {};
   if (reportText.trim()) {
     const rawLines = reportText.split('\n').map(l => l.replace(/\r$/, ''));
     reportMeta = parseOfficialReportMeta(rawLines);
     reportRosters = parseOfficialReportRosters(rawLines);
     reportGoals = parseOfficialReportGoals(rawLines);
     reportPim = parseOfficialReportPenaltyPIM(rawLines);
+    reportPP = parseOfficialReportPowerPlay(rawLines);
     const shortNames = Object.keys(reportRosters);
     reportOttShort = shortNames.find(t => /ottawa|67/i.test(t));
     reportOppShort = shortNames.find(t => t !== reportOttShort);
@@ -1335,6 +1362,16 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
   } else {
     alert('Could not find a score header in either pasted text. Try the manual Add Game form instead.');
     return;
+  }
+  // The box score's "PP / FOW" table is the preferred source (already in newGame.ppg etc. above if
+  // present). When that's missing — always true in standalone/report-only mode, since that table lives
+  // only in the box score — fall back to the report's own "POWER PLAY OPPORTUNITIES" section instead of
+  // silently leaving these at zero.
+  if (reportPP && newGame.ppo === 0 && newGame.pk_against === 0) {
+    const ottPP = reportOttShort && reportPP[reportOttShort];
+    const oppPP = reportOppShort && reportPP[reportOppShort];
+    if (ottPP) { newGame.ppg = ottPP.gf; newGame.ppo = ottPP.opportunities; }
+    if (oppPP) { newGame.pk_ga = oppPP.gf; newGame.pk_against = oppPP.opportunities; }
   }
   if (reportMeta && reportMeta.attendance) newGame.attendance = reportMeta.attendance;
   if (reportMeta && (reportMeta.arena || reportMeta.startTime || reportMeta.endTime)) {
