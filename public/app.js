@@ -499,7 +499,7 @@ function parseGamesheetText(text) {
       const pos = line.toUpperCase(); i++;
       let number = ''; if (i < lines.length && /^\d+$/.test(lines[i])) { number = lines[i]; i++; }
       let name = ''; if (i < lines.length) { name = lines[i]; i++; }
-      if (i < lines.length && lines[i] === '*') { i++; }
+      if (i < lines.length && /^(\*|A|C)$/.test(lines[i])) { i++; }
       const vals = [];
       while (i < lines.length && vals.length < 6 && /^[-+]?\d+(\/\d+)?$/.test(lines[i])) { vals.push(lines[i]); i++; }
       const goals = parseInt(vals[0]) || 0, assists = parseInt(vals[1]) || 0;
@@ -1241,7 +1241,7 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
     oppIdx = ottIdx === 0 ? 1 : 0;
   }
 
-  let reportMeta = null, reportRosters = null, reportGoals = null, reportPim = null, reportOttShort = null, reportOppShort = null, ottSegments = [];
+  let reportMeta = null, reportRosters = null, reportGoals = null, reportPim = null, reportOttShort = null, reportOppShort = null, ottSegments = [], ottSpanByName = {};
   if (reportText.trim()) {
     const rawLines = reportText.split('\n').map(l => l.replace(/\r$/, ''));
     reportMeta = parseOfficialReportMeta(rawLines);
@@ -1271,11 +1271,23 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
         off_seconds: t.offPeriod ? periodToAbsoluteSeconds(t.offPeriod, parseTimeToSeconds(t.offTime)) : null
       };
     });
+    // A goalie swapped out and back in (e.g. a delayed penalty call) produces multiple segments with
+    // the same name. attributeGoalie() below correctly checks every individual segment — but for the
+    // one row saved per goalie, collapse same-named segments into a single earliest-on/latest-off span
+    // so their stored ice time covers the whole game, not just whichever segment happened to come first.
+    ottSpanByName = {};
+    ottSegments.forEach(s => {
+      const cur = ottSpanByName[s.name];
+      if (!cur) { ottSpanByName[s.name] = { on_seconds: s.on_seconds, off_seconds: s.off_seconds }; return; }
+      cur.on_seconds = Math.min(cur.on_seconds, s.on_seconds);
+      if (cur.off_seconds !== null && s.off_seconds !== null) cur.off_seconds = Math.max(cur.off_seconds, s.off_seconds);
+      else cur.off_seconds = null;
+    });
     // Attach ice-time windows onto the matching box-score goalie rows, if box score was pasted
     if (teams && teams[teamNames[ottIdx]]) {
       teams[teamNames[ottIdx]].goalies = teams[teamNames[ottIdx]].goalies.map(gk => {
-        const seg = ottSegments.find(s => s.name === gk.name);
-        return seg ? { ...gk, on_seconds: seg.on_seconds, off_seconds: seg.off_seconds } : gk;
+        const span = ottSpanByName[gk.name];
+        return span ? { ...gk, on_seconds: span.on_seconds, off_seconds: span.off_seconds } : gk;
       });
     }
   }
@@ -1364,15 +1376,16 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
     if (ottSegments.length) {
       const oppGoals = reportGoals.filter(g => g.team === reportOppShort);
       const gaCount = {};
-      ottSegments.forEach(s => { gaCount[s.name] = 0; });
+      Object.keys(ottSpanByName).forEach(name => { gaCount[name] = 0; });
       oppGoals.forEach(g => {
         const attributed = attributeGoalie(periodToAbsoluteSeconds(g.period, parseTimeToSeconds(g.time)));
         if (attributed && gaCount[attributed] !== undefined) gaCount[attributed]++;
       });
-      syntheticGoalies = ottSegments.map(s => {
+      syntheticGoalies = Object.keys(ottSpanByName).map(name => {
+        const s = ottSpanByName[name];
         const durationSec = (s.off_seconds ?? periodToAbsoluteSeconds('3rd', 1200)) - s.on_seconds;
         const mins = Math.floor(durationSec / 60), secs = durationSec % 60;
-        return { name: s.name, ga: gaCount[s.name] || 0, min: mins + ':' + String(secs).padStart(2, '0'),
+        return { name, ga: gaCount[name] || 0, min: mins + ':' + String(secs).padStart(2, '0'),
           shots: 0, saves: 0, pim: 0, on_seconds: s.on_seconds, off_seconds: s.off_seconds };
       });
     }
