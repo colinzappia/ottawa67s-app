@@ -536,6 +536,28 @@ function parseGamesheetText(text) {
   return teams;
 }
 
+// Every box score lists each penalty under an "ohl-xxx" team tag, and a penalty that actually produced
+// a power play ends with "Power Play" (offsetting minors, misconducts etc. don't). Counting those tagged
+// penalties recovers each side's power-play opportunities even when the box score omits its "PP / FOW"
+// summary table. A 4:00 double minor counts as two opportunities, matching how the official report tallies it.
+//   oppPenaltyPP   = Ottawa's power-play opportunities (the opponent took the penalty)
+//   ottPenaltyPP   = times Ottawa was shorthanded (Ottawa took the penalty)
+function parseBoxScorePenaltySummary(lines) {
+  let ottPenaltyPP = 0, oppPenaltyPP = 0, found = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const tag = lines[i].match(/^ohl-([a-z0-9]+)$/i);
+    if (!tag || !/^Penalty/i.test(lines[i + 1] || '')) continue;
+    found++;
+    const line = lines[i + 1];
+    if (!/Power\s*Play\s*$/i.test(line)) continue;
+    const dur = line.match(/(\d+):(\d+)\s*Power\s*Play\s*$/i);
+    const minutes = dur ? parseInt(dur[1], 10) + parseInt(dur[2], 10) / 60 : 2;
+    const count = (minutes >= 4 && minutes < 5) ? 2 : 1;
+    if (/ott/i.test(tag[1])) ottPenaltyPP += count; else oppPenaltyPP += count;
+  }
+  return { ottPenaltyPP, oppPenaltyPP, penaltiesFound: found };
+}
+
 function parseShotsAndSpecialTeams(lines) {
   const result = { shots: [], ppFrac: [], ppFow: [] };
   for (let i = 0; i < lines.length; i++) {
@@ -580,7 +602,7 @@ function parseGoalsEvents(lines) {
         while (changed) {
           changed = false;
           for (const f of FLAG_KEYWORDS) {
-            if (rest.toUpperCase().endsWith(f)) { foundFlags.unshift(f); rest = rest.slice(0, rest.length - f.length); changed = true; break; }
+            if (rest.toUpperCase().endsWith(f)) { foundFlags.unshift(f); rest = rest.slice(0, rest.length - f.length).replace(/\s+$/, ''); changed = true; break; }
           }
         }
         let strengthHint = null;
@@ -1373,6 +1395,40 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
     if (ottPP) { newGame.ppg = ottPP.gf; newGame.ppo = ottPP.opportunities; }
     if (oppPP) { newGame.pk_ga = oppPP.gf; newGame.pk_against = oppPP.opportunities; }
   }
+  // ---- Team numbers from whatever the box score does contain ----
+  // The box score's own shots / "PP / FOW" tables aren't always part of what gets pasted, and when the game
+  // record is started from the official report (no score header in the box-score paste) they were never
+  // consulted at all. Fall back, in order, to: the box-score tables -> the report's PP section (above) ->
+  // numbers recovered from the skater SOG column and the penalties tagged "Power Play".
+  const offenseFromOfficial = newGame.ppo > 0 || newGame.ppg > 0;
+  const defenseFromOfficial = newGame.pk_against > 0 || newGame.pk_ga > 0;
+  const hasPPTable = !!(summary && ottIdx >= 0 && summary.ppFrac[ottIdx] && summary.ppFrac[oppIdx]);
+  let derivedShotsNote = '';
+  if (teams && ottIdx >= 0) {
+    if (newGame.sf === 0 && newGame.sa === 0) {
+      if (summary && summary.shots[ottIdx] !== undefined && summary.shots[oppIdx] !== undefined) {
+        newGame.sf = summary.shots[ottIdx]; newGame.sa = summary.shots[oppIdx];
+      } else {
+        const sumSog = t => (teams[t].skaters || []).reduce((n, s) => n + (Number(s.sog) || 0), 0);
+        newGame.sf = sumSog(teamNames[ottIdx]); newGame.sa = sumSog(teamNames[oppIdx]);
+        derivedShotsNote = ' (shots totalled from each skater\'s SOG)';
+      }
+    }
+    if (!offenseFromOfficial && !defenseFromOfficial && hasPPTable) {
+      const [og, oo] = summary.ppFrac[ottIdx].split('/').map(n => parseInt(n) || 0);
+      const [pg, po] = summary.ppFrac[oppIdx].split('/').map(n => parseInt(n) || 0);
+      newGame.ppg = og; newGame.ppo = oo; newGame.pk_ga = pg; newGame.pk_against = po;
+    }
+    const pen = parseBoxScorePenaltySummary(lines);
+    if (!hasPPTable && !offenseFromOfficial) newGame.ppo = pen.oppPenaltyPP;
+    if (!hasPPTable && !defenseFromOfficial) newGame.pk_against = pen.ottPenaltyPP;
+    if (!newGame.goalie) {
+      const og = (teams[teamNames[ottIdx]].goalies || []);
+      if (og.length) newGame.goalie = og.slice().sort((a, b) => minToSeconds(b.min) - minToSeconds(a.min))[0].name;
+    }
+  }
+  const deriveOffense = !offenseFromOfficial && !hasPPTable;   // PP goals for = goals tagged PP, counted after the goals are saved
+  const deriveDefense = !defenseFromOfficial && !hasPPTable;   // PP goals against, likewise
   if (reportMeta && reportMeta.attendance) newGame.attendance = reportMeta.attendance;
   if (reportMeta && (reportMeta.arena || reportMeta.startTime || reportMeta.endTime)) {
     const bits = [];
@@ -1431,6 +1487,7 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
 
   // Build and save the goals log, merging strength/on-ice data from the report when both sources are present
   let ppCount = 0, shCount = 0;
+  const goalTally = { OTT: { EV: 0, PP: 0, SH: 0, EN: 0, PS: 0 }, OPP: { EV: 0, PP: 0, SH: 0, EN: 0, PS: 0 } };
   if (goalsRaw) {
     const idx = buildTeamIndex(teams);
     const ottTeamName = teamNames[ottIdx];
@@ -1461,6 +1518,7 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
       }
       if (strength === 'PP') ppCount++;
       if (strength === 'SH') shCount++;
+      if (goalTally[teamCode] && goalTally[teamCode][strength] !== undefined) goalTally[teamCode][strength]++;
       const notes = [g.flag, onIceNote].filter(Boolean).join(' — ');
       const attributedGoalie = (teamCode === 'OPP' && ottSegments.length) ? attributeGoalie(periodToAbsoluteSeconds(g.period, parseTimeToSeconds(g.time))) : null;
       await api('/api/goals/' + gid, {
@@ -1479,6 +1537,7 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
       const onIceNote = (plusNames.length || minusNames.length) ? `On ice for: ${plusNames.join(', ')}. On ice against: ${minusNames.join(', ')}.` : '';
       if (g.strength === 'PP') ppCount++;
       if (g.strength === 'SH') shCount++;
+      if (goalTally[teamCode] && goalTally[teamCode][g.strength] !== undefined) goalTally[teamCode][g.strength]++;
       const attributedGoalie = (teamCode === 'OPP' && ottSegments.length) ? attributeGoalie(periodToAbsoluteSeconds(g.period, parseTimeToSeconds(g.time))) : null;
       await api('/api/goals/' + gid, {
         method: 'POST',
@@ -1486,6 +1545,18 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
       });
     }
   }
+
+  // Fill the game record's special-teams totals from the goals just saved. These fields used to be hard-coded
+  // to zero on import, so empty-net / shorthanded / penalty-shot counts never reached the Game Log even though
+  // every goal row itself was tagged correctly.
+  const finalGame = { ...newGame,
+    shgf: goalTally.OTT.SH, shga: goalTally.OPP.SH,
+    engf: goalTally.OTT.EN, enga: goalTally.OPP.EN,
+    psgf: goalTally.OTT.PS, psga: goalTally.OPP.PS };
+  if (deriveOffense) { finalGame.ppg = goalTally.OTT.PP; finalGame.ppo = Math.max(finalGame.ppo, finalGame.ppg); }
+  if (deriveDefense) { finalGame.pk_ga = goalTally.OPP.PP; finalGame.pk_against = Math.max(finalGame.pk_against, finalGame.pk_ga); }
+  try { await api('/api/games/' + gid, { method: 'PUT', body: JSON.stringify(finalGame) }); }
+  catch (e) { /* game and goals are already saved; the totals can still be edited on the Game Log tab */ }
 
   await loadGames();
   renderLogTab();
@@ -1495,8 +1566,14 @@ document.getElementById('p_importNewGameBtn').addEventListener('click', async ()
   await populateGoalsGameSelect();
 
   const skaterCount = teams ? teams[teamNames[ottIdx]].skaters.length : (reportRosters && reportOttShort ? Object.keys(reportRosters[reportOttShort]).length : 0);
-  const strengthNote = reportGoals ? 'tagged directly from the official report where matched, inferred from penalty timing otherwise' : 'inferred from penalty timing';
-  let successMsg = `Created the game vs ${newGame.opponent} with ${skaterCount} skaters and ${goalCount} goal(s) logged (${ppCount} power play, ${shCount} shorthanded, ${strengthNote}). Please double-check the date, venue, and result on the Game Log tab. Empty-net and penalty-shot goals aren't auto-detected — tag those manually in the Goals Log if any occurred.`;
+  const specialBits = [];
+  if (goalTally.OTT.PP || goalTally.OPP.PP) specialBits.push(`power-play goals ${goalTally.OTT.PP} for / ${goalTally.OPP.PP} against`);
+  if (goalTally.OTT.SH || goalTally.OPP.SH) specialBits.push(`shorthanded goals ${goalTally.OTT.SH} for / ${goalTally.OPP.SH} against`);
+  if (goalTally.OTT.EN || goalTally.OPP.EN) specialBits.push(`empty-net goals ${goalTally.OTT.EN} for / ${goalTally.OPP.EN} against`);
+  if (goalTally.OTT.PS || goalTally.OPP.PS) specialBits.push(`penalty-shot goals ${goalTally.OTT.PS} for / ${goalTally.OPP.PS} against`);
+  const teamLine = `Team numbers: shots ${finalGame.sf}–${finalGame.sa}, power play ${finalGame.ppg}/${finalGame.ppo}, penalty kill ${finalGame.pk_against - finalGame.pk_ga}/${finalGame.pk_against}${derivedShotsNote}.`;
+  let successMsg = `Created the game vs ${newGame.opponent} with ${skaterCount} skaters and ${goalCount} goal(s) logged` +
+    (specialBits.length ? ' (' + specialBits.join('; ') + ')' : '') + `.\n${teamLine}\nPlease double-check the date, venue, and result on the Game Log tab.`;
   if (goalCount === 0) {
     successMsg = `Created the game vs ${newGame.opponent}, but no individual goals could be parsed from the pasted text — the Goals Log for this game will be empty. Check that the pasted text includes the full "Goals" section, or add goals manually on the Goals Log tab.\n\n` + successMsg;
   }
@@ -1583,13 +1660,13 @@ async function renderSeasonGoalsBreakdown() {
   const filter = document.getElementById('g_typeFilter').value;
   const counts = await api('/api/goals-season-breakdown?gametype=' + encodeURIComponent(filter));
   const wrap = document.getElementById('g_seasonAgg');
-  wrap.innerHTML = `
-    <div class="agg-card"><div class="val">${counts.OTT.EV}</div><div class="lbl">67's EV Goals</div></div>
-    <div class="agg-card"><div class="val">${counts.OTT.PP}</div><div class="lbl">67's PP Goals</div></div>
-    <div class="agg-card"><div class="val">${counts.OTT.SH}</div><div class="lbl">67's SH Goals</div></div>
-    <div class="agg-card"><div class="val">${counts.OPP.EV}</div><div class="lbl">Opp EV Goals</div></div>
-    <div class="agg-card"><div class="val">${counts.OPP.PP}</div><div class="lbl">Opp PP Goals</div></div>
-    <div class="agg-card"><div class="val">${counts.OPP.SH}</div><div class="lbl">Opp SH Goals</div></div>`;
+  wrap.style.gridTemplateColumns = 'repeat(5, 1fr)';
+  const card = (v, l) => `<div class="agg-card"><div class="val">${v}</div><div class="lbl">${l}</div></div>`;
+  wrap.innerHTML =
+    card(counts.OTT.EV, "67's EV Goals") + card(counts.OTT.PP, "67's PP Goals") + card(counts.OTT.SH, "67's SH Goals") +
+    card(counts.OTT.EN, "67's EN Goals") + card(counts.OTT.PS, "67's Penalty Shots") +
+    card(counts.OPP.EV, 'Opp EV Goals') + card(counts.OPP.PP, 'Opp PP Goals') + card(counts.OPP.SH, 'Opp SH Goals') +
+    card(counts.OPP.EN, 'Opp EN Goals') + card(counts.OPP.PS, 'Opp Penalty Shots');
 }
 
 /* ===================== INIT ===================== */
