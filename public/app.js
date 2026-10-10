@@ -1184,6 +1184,21 @@ async function renderStatsTableForSelectedGame() {
 }
 function foPct(fow, fol) { const tot = fow + fol; return tot > 0 ? ((fow / tot) * 100).toFixed(1) + '%' : '—'; }
 
+// Save percentage the way hockey prints it: three decimals, no leading zero (.904). A perfect 1.000 keeps its 1.
+function fmtSvPct(saves, shots) {
+  const s = Number(shots) || 0;
+  if (s <= 0) return '—';
+  const v = Math.min(1, (Number(saves) || 0) / s);
+  const t = v.toFixed(3);
+  return t.startsWith('0') ? t.slice(1) : t;
+}
+// Goals-against average over 60 minutes
+function fmtGaa(ga, totalSeconds) { return totalSeconds > 0 ? ((ga * 3600) / totalSeconds).toFixed(2) : '—'; }
+function fmtClock(totalSeconds) {
+  const m = Math.floor(totalSeconds / 60), s = Math.round(totalSeconds % 60);
+  return m + ':' + String(s).padStart(2, '0');
+}
+
 function renderSkaterRows(rows) {
   const body = document.getElementById('p_statsBody');
   if (rows.length === 0) { body.innerHTML = '<tr><td colspan="13" style="color:var(--sub);">No skater stats yet. Paste a gamesheet above and Parse, or add rows manually.</td></tr>'; return; }
@@ -1236,7 +1251,7 @@ function renderGoalieRows(rows) {
   const body = document.getElementById('p_goalieBody');
   if (rows.length === 0) { body.innerHTML = '<tr><td colspan="8" style="color:var(--sub);">No goalie stats yet.</td></tr>'; return; }
   body.innerHTML = rows.map((r, i) => {
-    const svpct = (r.shots > 0) ? ((r.saves / r.shots) * 100).toFixed(1) + '%' : '—';
+    const svpct = fmtSvPct(r.saves, r.shots);
     return `
     <tr data-idx="${i}">
       <td contenteditable="true" data-field="name">${r.name || ''}</td>
@@ -1590,18 +1605,70 @@ document.getElementById('p_saveGameStats').addEventListener('click', async () =>
   await renderSeasonPlayerTotals();
   alert('Saved stats for this game.');
 });
+// Cumulative season totals for every player, built from each saved game's stats so the game-type
+// filter (Regular Season / Preseason / Playoffs / All) applies to skaters and goalies alike.
 async function renderSeasonPlayerTotals() {
-  const arr = await api('/api/player-stats-season');
-  const body = document.getElementById('p_seasonBody');
-  if (arr.length === 0) { body.innerHTML = '<tr><td colspan="11" style="color:var(--sub);">No player stats saved yet.</td></tr>'; return; }
-  body.innerHTML = arr.map(p => `
+  const skBody = document.getElementById('p_seasonBody');
+  const gkBody = document.getElementById('p_seasonGoalieBody');
+  const filter = document.getElementById('p_seasonTypeFilter').value;
+  let allGames;
+  try { allGames = await api('/api/games'); }
+  catch (e) {
+    skBody.innerHTML = '<tr><td colspan="12" style="color:var(--sub);">Could not load season totals.</td></tr>';
+    gkBody.innerHTML = '<tr><td colspan="8" style="color:var(--sub);">Could not load season totals.</td></tr>';
+    return;
+  }
+  // oldest first, so the jersey number shown is each player's most recent one
+  const picked = (filter === 'All' ? allGames : allGames.filter(g => (g.gametype || 'Regular Season') === filter))
+    .slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+  const perGame = await Promise.all(picked.map(g => api('/api/player-stats/' + g.id).catch(() => null)));
+
+  const skaters = {}, goalies = {};
+  perGame.forEach(d => {
+    if (!d) return;
+    (d.skaters || []).forEach(r => {
+      const name = (r.name || '').trim();
+      if (!name) return;
+      const p = skaters[name] || (skaters[name] = { name, number: '', gp: 0, goals: 0, assists: 0, plusMinus: 0, sog: 0, pim: 0, fow: 0, fol: 0 });
+      p.gp++;
+      p.goals += Number(r.goals) || 0; p.assists += Number(r.assists) || 0; p.plusMinus += Number(r.plusMinus) || 0;
+      p.sog += Number(r.sog) || 0; p.pim += Number(r.pim) || 0; p.fow += Number(r.fow) || 0; p.fol += Number(r.fol) || 0;
+      if (r.number) p.number = r.number;
+    });
+    (d.goalies || []).forEach(r => {
+      const name = (r.name || '').trim();
+      if (!name) return;
+      const secs = minToSeconds(String(r.min || ''));
+      const shots = Number(r.shots) || 0;
+      if (secs <= 0 && shots <= 0) return;           // dressed as the backup but never played
+      const g = goalies[name] || (goalies[name] = { name, gp: 0, secs: 0, ga: 0, shots: 0, saves: 0 });
+      g.gp++; g.secs += secs; g.ga += Number(r.ga) || 0; g.shots += shots; g.saves += Number(r.saves) || 0;
+    });
+  });
+
+  const skList = Object.values(skaters).sort((a, b) =>
+    (b.goals + b.assists) - (a.goals + a.assists) || b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name));
+  skBody.innerHTML = skList.length === 0
+    ? '<tr><td colspan="12" style="color:var(--sub);">No skater stats saved for this filter yet.</td></tr>'
+    : skList.map(p => `
     <tr>
-      <td style="text-align:left;">${p.name}</td>
-      <td>${p.gp}</td><td>${p.goals}</td><td>${p.assists}</td><td>${p.points}</td>
+      <td style="text-align:left;">${p.name}</td><td>${p.number}</td>
+      <td>${p.gp}</td><td>${p.goals}</td><td>${p.assists}</td><td>${p.goals + p.assists}</td>
       <td>${p.plusMinus > 0 ? '+' : ''}${p.plusMinus}</td><td>${p.sog}</td><td>${p.pim}</td>
       <td>${p.fow}</td><td>${p.fol}</td><td>${foPct(p.fow, p.fol)}</td>
     </tr>`).join('');
+
+  const gkList = Object.values(goalies).sort((a, b) => b.secs - a.secs || a.name.localeCompare(b.name));
+  gkBody.innerHTML = gkList.length === 0
+    ? '<tr><td colspan="8" style="color:var(--sub);">No goalie stats saved for this filter yet.</td></tr>'
+    : gkList.map(g => `
+    <tr>
+      <td style="text-align:left;">${g.name}</td>
+      <td>${g.gp}</td><td>${fmtClock(g.secs)}</td><td>${g.ga}</td><td>${fmtGaa(g.ga, g.secs)}</td>
+      <td>${g.shots}</td><td>${g.saves}</td><td>${fmtSvPct(g.saves, g.shots)}</td>
+    </tr>`).join('');
 }
+document.getElementById('p_seasonTypeFilter').addEventListener('change', renderSeasonPlayerTotals);
 
 /* ===================== GOALS LOG TAB ===================== */
 function goalsFilteredGames() {
