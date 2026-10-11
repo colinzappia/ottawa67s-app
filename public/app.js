@@ -934,17 +934,16 @@ function parseOfficialReportGoalieTimes(rawLines) {
 
 function compactAggCardsHTML(a) {
   const ppPct = a.ppo > 0 ? ((a.ppg / a.ppo) * 100).toFixed(1) + '%' : '—';
-  const pkPct = a.pk_against > 0 ? (((a.pk_against - a.pk_ga) / a.pk_against) * 100).toFixed(1) + '%' : '—';
+  const pkKills = a.pk_against - a.pk_ga;
+  const pkPct = a.pk_against > 0 ? ((pkKills / a.pk_against) * 100).toFixed(1) + '%' : '—';
   const diff = a.gf - a.ga; const diffStr = (diff > 0 ? '+' : '') + diff;
-  return `
-    <div class="agg-card"><div class="val">${a.gp}</div><div class="lbl">Games</div></div>
-    <div class="agg-card"><div class="val">${a.w}-${a.l}-${a.otl}-${a.sol}</div><div class="lbl">Record (W-L-OTL-SOL)</div></div>
-    <div class="agg-card"><div class="val">${a.pts}</div><div class="lbl">Points</div></div>
-    <div class="agg-card"><div class="val">${a.gf}</div><div class="lbl">Goals For</div></div>
-    <div class="agg-card"><div class="val">${a.ga}</div><div class="lbl">Goals Against</div></div>
-    <div class="agg-card"><div class="val">${diffStr}</div><div class="lbl">Goal Diff</div></div>
-    <div class="agg-card"><div class="val">${ppPct}</div><div class="lbl">Power Play %</div></div>
-    <div class="agg-card"><div class="val">${pkPct}</div><div class="lbl">Penalty Kill %</div></div>`;
+  const card = (v, l) => `<div class="agg-card"><div class="val">${v}</div><div class="lbl">${l}</div></div>`;
+  // Same notation as the game cards on the Game Log tab: power play = goals/opportunities, penalty kill = kills/times shorthanded
+  return card(a.gp, 'Games') + card(`${a.w}-${a.l}-${a.otl}-${a.sol}`, 'Record (W-L-OTL-SOL)') + card(a.pts, 'Points') +
+    card(a.gf, 'Goals For') + card(a.ga, 'Goals Against') + card(diffStr, 'Goal Diff') +
+    card(`${a.ppg}/${a.ppo}`, 'PP (Goals / Opps)') + card(ppPct, 'Power Play %') +
+    card(`${pkKills}/${a.pk_against}`, 'PK (Kills / Times SH)') + card(pkPct, 'Penalty Kill %') +
+    card(a.pk_ga, 'PP Goals Against');
 }
 
 function trendsFilteredGames() {
@@ -959,10 +958,10 @@ function renderTrendGrids() {
   const last5 = sorted.slice(0, 5);
   const last10 = sorted.slice(0, 10);
   document.getElementById('t_last5').innerHTML = last5.length
-    ? compactAggCardsHTML(computeAggregatesForGames(last5)) + `<div class="agg-card"><div class="val">${last5.length}</div><div class="lbl">Games Included</div></div>`
+    ? compactAggCardsHTML(computeAggregatesForGames(last5))
     : '<div class="empty-state">No games yet for this filter.</div>';
   document.getElementById('t_last10').innerHTML = last10.length
-    ? compactAggCardsHTML(computeAggregatesForGames(last10)) + `<div class="agg-card"><div class="val">${last10.length}</div><div class="lbl">Games Included</div></div>`
+    ? compactAggCardsHTML(computeAggregatesForGames(last10))
     : '<div class="empty-state">No games yet for this filter.</div>';
 }
 
