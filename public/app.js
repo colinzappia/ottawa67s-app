@@ -1177,8 +1177,11 @@ function currentPlayerGameId() { return document.getElementById('p_gameSelect').
 
 async function renderStatsTableForSelectedGame() {
   const gid = currentPlayerGameId();
-  if (!gid) { renderSkaterRows([]); renderGoalieRows([]); return; }
+  if (!gid) { gameGoalTypes = {}; renderSkaterRows([]); renderGoalieRows([]); return; }
   const data = await api('/api/player-stats/' + gid);
+  let goalsThisGame = [];
+  try { goalsThisGame = await api('/api/goals/' + gid); } catch (e) { /* no goals logged yet */ }
+  gameGoalTypes = tallyGoalTypes(ottawaGoalCredits(games.find(g => String(g.id) === String(gid)), goalsThisGame));
   renderSkaterRows(data.skaters || []);
   renderGoalieRows(data.goalies || []);
 }
@@ -1199,6 +1202,39 @@ function fmtClock(totalSeconds) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
+/* ===================== PLAYER GOAL TYPES (from the Goals Log) ===================== */
+// Power-play (PPG), shorthanded (SHG), game-winning (GWG) and empty-net (ENG) goals for each player. They aren't saved on
+// the player rows, so they're read from the Goals Log. Scorer names there come as "First Last" or "Last, First", so
+// players are matched on the letters in the name, whatever the order or accents.
+function playerKey(name) {
+  return (name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .split(/[^a-z0-9]+/).filter(Boolean).sort().join(' ');
+}
+const zeroGoalTypes = () => ({ ppg: 0, shg: 0, gwg: 0, eng: 0 });
+// Every goal Ottawa scored in one game, tagged with its kind. The league's own "GAME WINNING" tag wins out; with no tag
+// on the game, a win's game-winner is Ottawa's (opponent's goals + 1)th goal, but only when the logged goals add up to
+// the final score (so a shootout win, or a game with a missing goal, never gets a guess).
+function ottawaGoalCredits(game, goals) {
+  const ott = goals.filter(g => g.team === 'OTT').slice()
+    .sort((a, b) => periodToAbsoluteSeconds(a.period, parseTimeToSeconds(a.time)) - periodToAbsoluteSeconds(b.period, parseTimeToSeconds(b.time)));
+  const oppCount = goals.filter(g => g.team === 'OPP').length;
+  const flagged = goals.filter(g => /game[\s-]*winning/i.test(g.notes || ''));
+  let gwgGoal = null;
+  if (flagged.length) gwgGoal = flagged.find(g => g.team === 'OTT') || null;
+  else if (game && game.result === 'W' && ott.length === Number(game.gf) && oppCount === Number(game.ga) && ott.length > oppCount) gwgGoal = ott[oppCount];
+  return ott.map(g => ({ key: playerKey(g.scorer), strength: g.strength, gwg: g === gwgGoal }));
+}
+function tallyGoalTypes(credits) {
+  const out = {};
+  credits.forEach(c => {
+    const t = out[c.key] || (out[c.key] = zeroGoalTypes());
+    if (c.strength === 'PP') t.ppg++; else if (c.strength === 'SH') t.shg++; else if (c.strength === 'EN') t.eng++;
+    if (c.gwg) t.gwg++;
+  });
+  return out;
+}
+let gameGoalTypes = {};   // goal types for the game currently shown in the per-game table
+
 /* ===================== SORTABLE COLUMNS ===================== */
 // Click any column heading to sort by it; click again to reverse. Names and positions start A→Z, jersey
 // numbers and GAA start low→high, every other stat starts with the biggest first. Anything blank (say, FO% for
@@ -1217,7 +1253,8 @@ const SKATER_COLS = {
   pos: { get: r => { const p = (r.pos || '').toUpperCase(); return p ? (POS_RANK[p] ?? 9) : null; }, first: 'asc' },
   number: numCol(r => r.number, 'asc'),
   gp: numCol(r => r.gp), goals: numCol(r => r.goals), assists: numCol(r => r.assists), points: numCol(r => r.points),
-  plusMinus: numCol(r => r.plusMinus), sog: numCol(r => r.sog), pim: numCol(r => r.pim),
+  plusMinus: numCol(r => r.plusMinus), ppg: numCol(r => r.ppg), shg: numCol(r => r.shg), gwg: numCol(r => r.gwg), eng: numCol(r => r.eng),
+  sog: numCol(r => r.sog), pim: numCol(r => r.pim),
   fow: numCol(r => r.fow), fol: numCol(r => r.fol),
   fopct: { get: r => ratioOrNull(Number(r.fow) || 0, (Number(r.fow) || 0) + (Number(r.fol) || 0)), first: 'desc' }
 };
@@ -1267,7 +1304,8 @@ const defaultSkaterOrder = (a, b) => (Number(b.points) || 0) - (Number(a.points)
 
 function renderSkaterRows(rows) {
   const body = document.getElementById('p_statsBody');
-  if (rows.length === 0) { body.innerHTML = '<tr><td colspan="13" style="color:var(--sub);">No skater stats yet. Paste a gamesheet above and Parse, or add rows manually.</td></tr>'; return; }
+  if (rows.length === 0) { body.innerHTML = '<tr><td colspan="17" style="color:var(--sub);">No skater stats yet. Paste a gamesheet above and Parse, or add rows manually.</td></tr>'; return; }
+  rows.forEach(r => Object.assign(r, zeroGoalTypes(), gameGoalTypes[playerKey(r.name)] || {}));
   const sorted = sortRows(rows, sortState.skater, SKATER_COLS, defaultSkaterOrder);
   body.innerHTML = sorted.map((r, i) => `
     <tr data-idx="${i}">
@@ -1278,6 +1316,7 @@ function renderSkaterRows(rows) {
       <td contenteditable="true" data-field="assists">${r.assists || 0}</td>
       <td contenteditable="true" data-field="points">${r.points || 0}</td>
       <td contenteditable="true" data-field="plusMinus">${r.plusMinus || 0}</td>
+      <td>${r.ppg || 0}</td><td>${r.shg || 0}</td><td>${r.gwg || 0}</td><td>${r.eng || 0}</td>
       <td contenteditable="true" data-field="sog">${r.sog || 0}</td>
       <td contenteditable="true" data-field="pim">${r.pim || 0}</td>
       <td contenteditable="true" data-field="fow">${r.fow || 0}</td>
@@ -1684,7 +1723,7 @@ async function renderSeasonPlayerTotals() {
   let allGames;
   try { allGames = await api('/api/games'); }
   catch (e) {
-    skBody.innerHTML = '<tr><td colspan="12" style="color:var(--sub);">Could not load season totals.</td></tr>';
+    skBody.innerHTML = '<tr><td colspan="16" style="color:var(--sub);">Could not load season totals.</td></tr>';
     gkBody.innerHTML = '<tr><td colspan="8" style="color:var(--sub);">Could not load season totals.</td></tr>';
     return;
   }
@@ -1692,6 +1731,7 @@ async function renderSeasonPlayerTotals() {
   const picked = (filter === 'All' ? allGames : allGames.filter(g => (g.gametype || 'Regular Season') === filter))
     .slice().sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
   const perGame = await Promise.all(picked.map(g => api('/api/player-stats/' + g.id).catch(() => null)));
+  const goalsPerGame = await Promise.all(picked.map(g => api('/api/goals/' + g.id).catch(() => [])));
 
   const skaters = {}, goalies = {};
   perGame.forEach(d => {
@@ -1716,36 +1756,44 @@ async function renderSeasonPlayerTotals() {
     });
   });
 
-  Object.values(skaters).forEach(p => { p.points = p.goals + p.assists; });
+  const credits = [];
+  picked.forEach((g, i) => ottawaGoalCredits(g, goalsPerGame[i] || []).forEach(c => credits.push(c)));
+  const typesByKey = tallyGoalTypes(credits);
+  const skaterKeys = new Set(Object.values(skaters).map(p => playerKey(p.name)));
+  const unmatched = credits.filter(c => !skaterKeys.has(c.key)).length;
+  Object.values(skaters).forEach(p => { p.points = p.goals + p.assists; Object.assign(p, zeroGoalTypes(), typesByKey[playerKey(p.name)] || {}); });
   const gamesCounted = perGame.filter(d => d && ((d.skaters || []).length || (d.goalies || []).length)).length;
-  seasonData = { skaters: Object.values(skaters), goalies: Object.values(goalies), games: gamesCounted };
+  seasonData = { skaters: Object.values(skaters), goalies: Object.values(goalies), games: gamesCounted, unmatched };
   paintSeasonTables();
 }
-let seasonData = { skaters: [], goalies: [], games: 0 };
+let seasonData = { skaters: [], goalies: [], games: 0, unmatched: 0 };
 function paintSeasonTables() {
   const skBody = document.getElementById('p_seasonBody');
   const gkBody = document.getElementById('p_seasonGoalieBody');
   const skBase = (a, b) => b.points - a.points || b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name);
   const skList = sortRows(seasonData.skaters, sortState.seasonSkater, SKATER_COLS, skBase);
   skBody.innerHTML = skList.length === 0
-    ? '<tr><td colspan="12" style="color:var(--sub);">No skater stats saved for this filter yet.</td></tr>'
+    ? '<tr><td colspan="16" style="color:var(--sub);">No skater stats saved for this filter yet.</td></tr>'
     : skList.map(p => `
     <tr>
       <td style="text-align:left;">${p.name}</td><td>${p.number}</td>
       <td>${p.gp}</td><td>${p.goals}</td><td>${p.assists}</td><td>${p.points}</td>
-      <td>${p.plusMinus > 0 ? '+' : ''}${p.plusMinus}</td><td>${p.sog}</td><td>${p.pim}</td>
+      <td>${p.plusMinus > 0 ? '+' : ''}${p.plusMinus}</td><td>${p.ppg}</td><td>${p.shg}</td><td>${p.gwg}</td><td>${p.eng}</td><td>${p.sog}</td><td>${p.pim}</td>
       <td>${p.fow}</td><td>${p.fol}</td><td>${foPct(p.fow, p.fol)}</td>
     </tr>`).join('');
+  const unmatchedNote = document.getElementById('p_seasonUnmatched');
+  unmatchedNote.textContent = seasonData.unmatched > 0
+    ? `${seasonData.unmatched} goal${seasonData.unmatched === 1 ? '' : 's'} in the Goals Log couldn't be matched to a player in this table (the scorer's name doesn't match a stats row), so ${seasonData.unmatched === 1 ? 'it is' : 'they are'} left out of PPG, SHG, GWG and ENG.` : '';
 
   // Team totals, pinned under each table (they sit outside the sortable rows, so sorting never moves them).
   // GP here is the number of games these totals cover; adding up each player's GP would double-count.
   const skFoot = document.getElementById('p_seasonFoot');
   if (skList.length === 0) skFoot.innerHTML = '';
   else {
-    const t = skList.reduce((a, p) => { a.goals += p.goals; a.assists += p.assists; a.sog += p.sog; a.pim += p.pim; a.fow += p.fow; a.fol += p.fol; return a; },
-      { goals: 0, assists: 0, sog: 0, pim: 0, fow: 0, fol: 0 });
+    const t = skList.reduce((a, p) => { a.goals += p.goals; a.assists += p.assists; a.ppg += p.ppg; a.shg += p.shg; a.gwg += p.gwg; a.eng += p.eng; a.sog += p.sog; a.pim += p.pim; a.fow += p.fow; a.fol += p.fol; return a; },
+      { goals: 0, assists: 0, ppg: 0, shg: 0, gwg: 0, eng: 0, sog: 0, pim: 0, fow: 0, fol: 0 });
     skFoot.innerHTML = `<tr><td style="text-align:left;">Team Totals</td><td></td><td>${seasonData.games}</td>` +
-      `<td>${t.goals}</td><td>${t.assists}</td><td>${t.goals + t.assists}</td><td>—</td><td>${t.sog}</td><td>${t.pim}</td>` +
+      `<td>${t.goals}</td><td>${t.assists}</td><td>${t.goals + t.assists}</td><td>—</td><td>${t.ppg}</td><td>${t.shg}</td><td>${t.gwg}</td><td>${t.eng}</td><td>${t.sog}</td><td>${t.pim}</td>` +
       `<td>${t.fow}</td><td>${t.fol}</td><td>${foPct(t.fow, t.fol)}</td></tr>`;
   }
 

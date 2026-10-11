@@ -275,7 +275,7 @@
 
   <h3 class="subhead">Skaters</h3>
   <table class="stats-table" id="p_statsTable">
-    <thead><tr><th data-sort="name">Player</th><th data-sort="pos">Pos</th><th data-sort="number">#</th><th data-sort="goals">G</th><th data-sort="assists">A</th><th data-sort="points">P</th><th data-sort="plusMinus">+/-</th><th data-sort="sog">SOG</th><th data-sort="pim">PIM</th><th data-sort="fow">FOW</th><th data-sort="fol">FOL</th><th data-sort="fopct">FO%</th><th></th></tr></thead>
+    <thead><tr><th data-sort="name">Player</th><th data-sort="pos">Pos</th><th data-sort="number">#</th><th data-sort="goals">G</th><th data-sort="assists">A</th><th data-sort="points">P</th><th data-sort="plusMinus">+/-</th><th data-sort="ppg" title="Power-play goals">PPG</th><th data-sort="shg" title="Shorthanded goals (scored while killing a penalty)">SHG</th><th data-sort="gwg" title="Game-winning goals">GWG</th><th data-sort="eng" title="Empty-net goals">ENG</th><th data-sort="sog">SOG</th><th data-sort="pim">PIM</th><th data-sort="fow">FOW</th><th data-sort="fol">FOL</th><th data-sort="fopct">FO%</th><th></th></tr></thead>
     <tbody id="p_statsBody"></tbody>
   </table>
   <div class="btn-row" style="margin-bottom:10px;">
@@ -310,11 +310,12 @@
   <h3 class="subhead" style="margin-top:0;">Skaters</h3>
   <div class="season-table-wrap">
     <table class="stats-table" id="p_seasonTable">
-      <thead><tr><th data-sort="name">Player</th><th data-sort="number">#</th><th data-sort="gp">GP</th><th data-sort="goals">G</th><th data-sort="assists">A</th><th data-sort="points">P</th><th data-sort="plusMinus">+/-</th><th data-sort="sog">SOG</th><th data-sort="pim">PIM</th><th data-sort="fow">FOW</th><th data-sort="fol">FOL</th><th data-sort="fopct">FO%</th></tr></thead>
+      <thead><tr><th data-sort="name">Player</th><th data-sort="number">#</th><th data-sort="gp">GP</th><th data-sort="goals">G</th><th data-sort="assists">A</th><th data-sort="points">P</th><th data-sort="plusMinus">+/-</th><th data-sort="ppg" title="Power-play goals">PPG</th><th data-sort="shg" title="Shorthanded goals (scored while killing a penalty)">SHG</th><th data-sort="gwg" title="Game-winning goals">GWG</th><th data-sort="eng" title="Empty-net goals">ENG</th><th data-sort="sog">SOG</th><th data-sort="pim">PIM</th><th data-sort="fow">FOW</th><th data-sort="fol">FOL</th><th data-sort="fopct">FO%</th></tr></thead>
       <tbody id="p_seasonBody"></tbody>
       <tfoot id="p_seasonFoot"></tfoot>
     </table>
   </div>
+  <div class="hint" id="p_seasonUnmatched"></div>
 
   <h3 class="subhead">Goalies</h3>
   <div class="season-table-wrap">
@@ -324,7 +325,7 @@
       <tfoot id="p_seasonGoalieFoot"></tfoot>
     </table>
   </div>
-  <div class="hint">Cumulative totals across every saved game that matches the filter, updated each time you save or open this page. A goalie only gets credit for a game he actually played. The Team Totals rows add up the whole table; their GP is the number of games included.</div>
+  <div class="hint">Cumulative totals across every saved game that matches the filter, updated each time you save or open this page. A goalie only gets credit for a game he actually played. PPG, SHG (shorthanded goals), GWG and ENG are counted from the Goals Log, so they fill in automatically when a game is imported. The Team Totals rows add up the whole table; their GP is the number of games included.</div>
 </div>
 
 <!-- ============ TAB 4: GOALS LOG ============ -->
