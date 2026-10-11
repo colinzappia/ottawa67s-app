@@ -10,6 +10,7 @@
   th.sortable:hover { color: var(--brand); background: #f3f4f6; }
   th.sortable.sorted-asc::after { content: " \25B2"; font-size: 8px; color: var(--brand); }
   th.sortable.sorted-desc::after { content: " \25BC"; font-size: 8px; color: var(--brand); }
+  table.stats-table tfoot td { font-weight: 800; background: var(--panel); border-top: 2px solid var(--ink); }
 </style>
 </head>
 <body>
@@ -311,6 +312,7 @@
     <table class="stats-table" id="p_seasonTable">
       <thead><tr><th data-sort="name">Player</th><th data-sort="number">#</th><th data-sort="gp">GP</th><th data-sort="goals">G</th><th data-sort="assists">A</th><th data-sort="points">P</th><th data-sort="plusMinus">+/-</th><th data-sort="sog">SOG</th><th data-sort="pim">PIM</th><th data-sort="fow">FOW</th><th data-sort="fol">FOL</th><th data-sort="fopct">FO%</th></tr></thead>
       <tbody id="p_seasonBody"></tbody>
+      <tfoot id="p_seasonFoot"></tfoot>
     </table>
   </div>
 
@@ -319,9 +321,10 @@
     <table class="stats-table" id="p_seasonGoalieTable">
       <thead><tr><th data-sort="name">Player</th><th data-sort="gp">GP</th><th data-sort="min">MIN</th><th data-sort="ga">GA</th><th data-sort="gaa">GAA</th><th data-sort="shots">Shots</th><th data-sort="saves">Saves</th><th data-sort="svpct">SV%</th></tr></thead>
       <tbody id="p_seasonGoalieBody"></tbody>
+      <tfoot id="p_seasonGoalieFoot"></tfoot>
     </table>
   </div>
-  <div class="hint">Cumulative totals across every saved game that matches the filter, updated each time you save or open this page. A goalie only gets credit for a game he actually played.</div>
+  <div class="hint">Cumulative totals across every saved game that matches the filter, updated each time you save or open this page. A goalie only gets credit for a game he actually played. The Team Totals rows add up the whole table; their GP is the number of games included.</div>
 </div>
 
 <!-- ============ TAB 4: GOALS LOG ============ -->

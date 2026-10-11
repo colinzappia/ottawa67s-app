@@ -1717,10 +1717,11 @@ async function renderSeasonPlayerTotals() {
   });
 
   Object.values(skaters).forEach(p => { p.points = p.goals + p.assists; });
-  seasonData = { skaters: Object.values(skaters), goalies: Object.values(goalies) };
+  const gamesCounted = perGame.filter(d => d && ((d.skaters || []).length || (d.goalies || []).length)).length;
+  seasonData = { skaters: Object.values(skaters), goalies: Object.values(goalies), games: gamesCounted };
   paintSeasonTables();
 }
-let seasonData = { skaters: [], goalies: [] };
+let seasonData = { skaters: [], goalies: [], games: 0 };
 function paintSeasonTables() {
   const skBody = document.getElementById('p_seasonBody');
   const gkBody = document.getElementById('p_seasonGoalieBody');
@@ -1736,6 +1737,18 @@ function paintSeasonTables() {
       <td>${p.fow}</td><td>${p.fol}</td><td>${foPct(p.fow, p.fol)}</td>
     </tr>`).join('');
 
+  // Team totals, pinned under each table (they sit outside the sortable rows, so sorting never moves them).
+  // GP here is the number of games these totals cover; adding up each player's GP would double-count.
+  const skFoot = document.getElementById('p_seasonFoot');
+  if (skList.length === 0) skFoot.innerHTML = '';
+  else {
+    const t = skList.reduce((a, p) => { a.goals += p.goals; a.assists += p.assists; a.sog += p.sog; a.pim += p.pim; a.fow += p.fow; a.fol += p.fol; return a; },
+      { goals: 0, assists: 0, sog: 0, pim: 0, fow: 0, fol: 0 });
+    skFoot.innerHTML = `<tr><td style="text-align:left;">Team Totals</td><td></td><td>${seasonData.games}</td>` +
+      `<td>${t.goals}</td><td>${t.assists}</td><td>${t.goals + t.assists}</td><td>—</td><td>${t.sog}</td><td>${t.pim}</td>` +
+      `<td>${t.fow}</td><td>${t.fol}</td><td>${foPct(t.fow, t.fol)}</td></tr>`;
+  }
+
   const gkBase = (a, b) => b.secs - a.secs || a.name.localeCompare(b.name);
   const gkList = sortRows(seasonData.goalies, sortState.seasonGoalie, GOALIE_SEASON_COLS, gkBase);
   gkBody.innerHTML = gkList.length === 0
@@ -1746,6 +1759,14 @@ function paintSeasonTables() {
       <td>${g.gp}</td><td>${fmtClock(g.secs)}</td><td>${g.ga}</td><td>${fmtGaa(g.ga, g.secs)}</td>
       <td>${g.shots}</td><td>${g.saves}</td><td>${fmtSvPct(g.saves, g.shots)}</td>
     </tr>`).join('');
+
+  const gkFoot = document.getElementById('p_seasonGoalieFoot');
+  if (gkList.length === 0) gkFoot.innerHTML = '';
+  else {
+    const t = gkList.reduce((a, g) => { a.secs += g.secs; a.ga += g.ga; a.shots += g.shots; a.saves += g.saves; return a; }, { secs: 0, ga: 0, shots: 0, saves: 0 });
+    gkFoot.innerHTML = `<tr><td style="text-align:left;">Team Totals</td><td>${seasonData.games}</td><td>${fmtClock(t.secs)}</td>` +
+      `<td>${t.ga}</td><td>${fmtGaa(t.ga, t.secs)}</td><td>${t.shots}</td><td>${t.saves}</td><td>${fmtSvPct(t.saves, t.shots)}</td></tr>`;
+  }
 }
 document.getElementById('p_seasonTypeFilter').addEventListener('change', renderSeasonPlayerTotals);
 wireSortHeaders('p_statsTable', sortState.skater, SKATER_COLS, () => renderSkaterRows(readSkaterRowsFromTable()));
