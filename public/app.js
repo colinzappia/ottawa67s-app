@@ -353,8 +353,9 @@ function computeAggregates() {
 }
 function renderAggregates() {
   const a = computeAggregates();
+  const pkKills = a.pk_against - a.pk_ga;
   const ppPct = a.ppo > 0 ? ((a.ppg / a.ppo) * 100).toFixed(1) + '%' : '—';
-  const pkPct = a.pk_against > 0 ? (((a.pk_against - a.pk_ga) / a.pk_against) * 100).toFixed(1) + '%' : '—';
+  const pkPct = a.pk_against > 0 ? ((pkKills / a.pk_against) * 100).toFixed(1) + '%' : '—';
   const diff = a.gf - a.ga; const diffStr = (diff > 0 ? '+' : '') + diff;
   const gpg = a.gp > 0 ? (a.gf / a.gp).toFixed(2) : '0.00';
   const gapg = a.gp > 0 ? (a.ga / a.gp).toFixed(2) : '0.00';
@@ -372,7 +373,9 @@ function renderAggregates() {
     <div class="agg-card"><div class="val">${gapg}</div><div class="lbl">GA/Game</div></div>
     <div class="agg-card"><div class="val">${sfpg}</div><div class="lbl">Shots For/Game</div></div>
     <div class="agg-card"><div class="val">${sapg}</div><div class="lbl">Shots Against/Game</div></div>
+    <div class="agg-card"><div class="val">${a.ppg}/${a.ppo}</div><div class="lbl">PP (Goals / Opps)</div></div>
     <div class="agg-card"><div class="val">${ppPct}</div><div class="lbl">Power Play %</div></div>
+    <div class="agg-card"><div class="val">${pkKills}/${a.pk_against}</div><div class="lbl">PK (Kills / Times SH)</div></div>
     <div class="agg-card"><div class="val">${pkPct}</div><div class="lbl">Penalty Kill %</div></div>
     <div class="agg-card"><div class="val">${a.shgf} / ${a.shga}</div><div class="lbl">SH Goals F/A</div></div>
     <div class="agg-card"><div class="val">${a.engf} / ${a.enga}</div><div class="lbl">EN Goals F/A</div></div>`;
