@@ -5,6 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ottawa 67's Broadcast Toolkit — 2026-27</title>
 <link rel="stylesheet" href="style.css">
+<style>
+  th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+  th.sortable:hover { color: var(--brand); background: #f3f4f6; }
+  th.sortable.sorted-asc::after { content: " \25B2"; font-size: 8px; color: var(--brand); }
+  th.sortable.sorted-desc::after { content: " \25BC"; font-size: 8px; color: var(--brand); }
+</style>
 </head>
 <body>
 
@@ -264,11 +270,11 @@
     <div><label>Select Game</label><select id="p_gameSelect"></select></div>
     <div style="flex:0;"><button class="ghost" id="p_refreshGames">Refresh List</button></div>
   </div>
-  <div class="hint">Stats for a game get filled in automatically when you import its gamesheet from the Game Log tab. You can also add or correct rows manually below. <a href="#p_seasonAnchor" style="color:var(--brand);font-weight:600;">Jump to season totals ↓</a></div>
+  <div class="hint">Stats for a game get filled in automatically when you import its gamesheet from the Game Log tab. You can also add or correct rows manually below. Click any column heading to sort by it (click again to reverse). <a href="#p_seasonAnchor" style="color:var(--brand);font-weight:600;">Jump to season totals ↓</a></div>
 
   <h3 class="subhead">Skaters</h3>
   <table class="stats-table" id="p_statsTable">
-    <thead><tr><th>Player</th><th>Pos</th><th>#</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>SOG</th><th>PIM</th><th>FOW</th><th>FOL</th><th>FO%</th><th></th></tr></thead>
+    <thead><tr><th data-sort="name">Player</th><th data-sort="pos">Pos</th><th data-sort="number">#</th><th data-sort="goals">G</th><th data-sort="assists">A</th><th data-sort="points">P</th><th data-sort="plusMinus">+/-</th><th data-sort="sog">SOG</th><th data-sort="pim">PIM</th><th data-sort="fow">FOW</th><th data-sort="fol">FOL</th><th data-sort="fopct">FO%</th><th></th></tr></thead>
     <tbody id="p_statsBody"></tbody>
   </table>
   <div class="btn-row" style="margin-bottom:10px;">
@@ -277,7 +283,7 @@
 
   <h3 class="subhead">Goalies</h3>
   <table class="stats-table" id="p_goalieTable">
-    <thead><tr><th>Player</th><th>GA</th><th>MIN</th><th>Shots</th><th>Saves</th><th>SV%</th><th>PIM</th><th></th></tr></thead>
+    <thead><tr><th data-sort="name">Player</th><th data-sort="ga">GA</th><th data-sort="min">MIN</th><th data-sort="shots">Shots</th><th data-sort="saves">Saves</th><th data-sort="svpct">SV%</th><th data-sort="pim">PIM</th><th></th></tr></thead>
     <tbody id="p_goalieBody"></tbody>
   </table>
   <div class="btn-row" style="margin-bottom:10px;">
@@ -303,7 +309,7 @@
   <h3 class="subhead" style="margin-top:0;">Skaters</h3>
   <div class="season-table-wrap">
     <table class="stats-table" id="p_seasonTable">
-      <thead><tr><th>Player</th><th>#</th><th>GP</th><th>G</th><th>A</th><th>P</th><th>+/-</th><th>SOG</th><th>PIM</th><th>FOW</th><th>FOL</th><th>FO%</th></tr></thead>
+      <thead><tr><th data-sort="name">Player</th><th data-sort="number">#</th><th data-sort="gp">GP</th><th data-sort="goals">G</th><th data-sort="assists">A</th><th data-sort="points">P</th><th data-sort="plusMinus">+/-</th><th data-sort="sog">SOG</th><th data-sort="pim">PIM</th><th data-sort="fow">FOW</th><th data-sort="fol">FOL</th><th data-sort="fopct">FO%</th></tr></thead>
       <tbody id="p_seasonBody"></tbody>
     </table>
   </div>
@@ -311,7 +317,7 @@
   <h3 class="subhead">Goalies</h3>
   <div class="season-table-wrap">
     <table class="stats-table" id="p_seasonGoalieTable">
-      <thead><tr><th>Player</th><th>GP</th><th>MIN</th><th>GA</th><th>GAA</th><th>Shots</th><th>Saves</th><th>SV%</th></tr></thead>
+      <thead><tr><th data-sort="name">Player</th><th data-sort="gp">GP</th><th data-sort="min">MIN</th><th data-sort="ga">GA</th><th data-sort="gaa">GAA</th><th data-sort="shots">Shots</th><th data-sort="saves">Saves</th><th data-sort="svpct">SV%</th></tr></thead>
       <tbody id="p_seasonGoalieBody"></tbody>
     </table>
   </div>

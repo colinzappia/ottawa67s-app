@@ -1199,10 +1199,76 @@ function fmtClock(totalSeconds) {
   return m + ':' + String(s).padStart(2, '0');
 }
 
+/* ===================== SORTABLE COLUMNS ===================== */
+// Click any column heading to sort by it; click again to reverse. Names and positions start A→Z, jersey
+// numbers and GAA start low→high, every other stat starts with the biggest first. Anything blank (say, FO% for
+// a player who took no faceoffs) always sinks to the bottom, whichever way you're sorting.
+const POS_RANK = { C: 1, LW: 2, RW: 3, W: 3, LD: 4, RD: 5, D: 6 };
+const sortState = {
+  skater: { key: null, dir: 'desc' }, goalie: { key: null, dir: 'desc' },
+  seasonSkater: { key: null, dir: 'desc' }, seasonGoalie: { key: null, dir: 'desc' }
+};
+const numOrNull = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+const ratioOrNull = (num, den) => den > 0 ? num / den : null;
+const textCol = f => ({ get: r => (f(r) || '').toLowerCase(), first: 'asc' });
+const numCol = (f, first) => ({ get: r => numOrNull(f(r)), first: first || 'desc' });
+const SKATER_COLS = {
+  name: textCol(r => r.name),
+  pos: { get: r => { const p = (r.pos || '').toUpperCase(); return p ? (POS_RANK[p] ?? 9) : null; }, first: 'asc' },
+  number: numCol(r => r.number, 'asc'),
+  gp: numCol(r => r.gp), goals: numCol(r => r.goals), assists: numCol(r => r.assists), points: numCol(r => r.points),
+  plusMinus: numCol(r => r.plusMinus), sog: numCol(r => r.sog), pim: numCol(r => r.pim),
+  fow: numCol(r => r.fow), fol: numCol(r => r.fol),
+  fopct: { get: r => ratioOrNull(Number(r.fow) || 0, (Number(r.fow) || 0) + (Number(r.fol) || 0)), first: 'desc' }
+};
+const GOALIE_GAME_COLS = {
+  name: textCol(r => r.name), ga: numCol(r => r.ga), min: numCol(r => minToSeconds(String(r.min || ''))),
+  shots: numCol(r => r.shots), saves: numCol(r => r.saves), pim: numCol(r => r.pim),
+  svpct: { get: r => ratioOrNull(Number(r.saves) || 0, Number(r.shots) || 0), first: 'desc' }
+};
+const GOALIE_SEASON_COLS = {
+  name: textCol(r => r.name), gp: numCol(r => r.gp), min: numCol(r => r.secs), ga: numCol(r => r.ga),
+  gaa: { get: r => r.secs > 0 ? (r.ga * 3600) / r.secs : null, first: 'asc' },
+  shots: numCol(r => r.shots), saves: numCol(r => r.saves),
+  svpct: { get: r => ratioOrNull(r.saves, r.shots), first: 'desc' }
+};
+// `base` is the table's normal order; it also settles ties (the sort is stable), so equal values keep a sensible order.
+function sortRows(rows, state, cols, base) {
+  const out = rows.slice().sort(base);
+  if (!state.key || !cols[state.key]) return out;
+  const col = cols[state.key], mult = state.dir === 'asc' ? 1 : -1;
+  return out.sort((a, b) => {
+    const x = col.get(a), y = col.get(b);
+    const mx = x === null || x === undefined, my = y === null || y === undefined;
+    if (mx || my) return mx && my ? 0 : (mx ? 1 : -1);
+    return typeof x === 'string' ? mult * x.localeCompare(y) : mult * (x - y);
+  });
+}
+function updateSortArrows(tableId, state) {
+  document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    if (th.dataset.sort === state.key) th.classList.add(state.dir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+  });
+}
+function wireSortHeaders(tableId, state, cols, onChange) {
+  document.querySelectorAll('#' + tableId + ' th[data-sort]').forEach(th => {
+    th.classList.add('sortable');
+    th.title = 'Click to sort';
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      if (state.key === key) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+      else { state.key = key; state.dir = (cols[key] && cols[key].first) || 'desc'; }
+      updateSortArrows(tableId, state);
+      onChange();
+    });
+  });
+}
+const defaultSkaterOrder = (a, b) => (Number(b.points) || 0) - (Number(a.points) || 0) || (Number(b.goals) || 0) - (Number(a.goals) || 0);
+
 function renderSkaterRows(rows) {
   const body = document.getElementById('p_statsBody');
   if (rows.length === 0) { body.innerHTML = '<tr><td colspan="13" style="color:var(--sub);">No skater stats yet. Paste a gamesheet above and Parse, or add rows manually.</td></tr>'; return; }
-  const sorted = rows.slice().sort((a, b) => (Number(b.points) || 0) - (Number(a.points) || 0) || (Number(b.goals) || 0) - (Number(a.goals) || 0));
+  const sorted = sortRows(rows, sortState.skater, SKATER_COLS, defaultSkaterOrder);
   body.innerHTML = sorted.map((r, i) => `
     <tr data-idx="${i}">
       <td contenteditable="true" data-field="name">${r.name || ''}</td>
@@ -1250,10 +1316,10 @@ document.getElementById('p_addRowBtn').addEventListener('click', () => {
 function renderGoalieRows(rows) {
   const body = document.getElementById('p_goalieBody');
   if (rows.length === 0) { body.innerHTML = '<tr><td colspan="8" style="color:var(--sub);">No goalie stats yet.</td></tr>'; return; }
-  body.innerHTML = rows.map((r, i) => {
+  body.innerHTML = sortRows(rows, sortState.goalie, GOALIE_GAME_COLS, () => 0).map((r, i) => {
     const svpct = fmtSvPct(r.saves, r.shots);
     return `
-    <tr data-idx="${i}">
+    <tr data-idx="${i}" data-on="${r.on_seconds ?? ''}" data-off="${r.off_seconds ?? ''}">
       <td contenteditable="true" data-field="name">${r.name || ''}</td>
       <td contenteditable="true" data-field="ga">${r.ga || 0}</td>
       <td contenteditable="true" data-field="min">${r.min || ''}</td>
@@ -1276,7 +1342,11 @@ function readGoalieRowsFromTable() {
     const shots = parseInt(tr.querySelector('[data-field="shots"]').textContent) || 0;
     const saves = parseInt(tr.querySelector('[data-field="saves"]').textContent) || 0;
     const pim = parseInt(tr.querySelector('[data-field="pim"]').textContent) || 0;
-    rows.push({ name, ga, min, shots, saves, pim });
+    const row = { name, ga, min, shots, saves, pim };
+    // the goalie's on-ice window isn't a visible column, so carry it through (sorting or saving must not drop it)
+    if (tr.dataset.on !== undefined && tr.dataset.on !== '') row.on_seconds = Number(tr.dataset.on);
+    if (tr.dataset.off !== undefined && tr.dataset.off !== '') row.off_seconds = Number(tr.dataset.off);
+    rows.push(row);
   });
   return rows;
 }
@@ -1646,19 +1716,28 @@ async function renderSeasonPlayerTotals() {
     });
   });
 
-  const skList = Object.values(skaters).sort((a, b) =>
-    (b.goals + b.assists) - (a.goals + a.assists) || b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name));
+  Object.values(skaters).forEach(p => { p.points = p.goals + p.assists; });
+  seasonData = { skaters: Object.values(skaters), goalies: Object.values(goalies) };
+  paintSeasonTables();
+}
+let seasonData = { skaters: [], goalies: [] };
+function paintSeasonTables() {
+  const skBody = document.getElementById('p_seasonBody');
+  const gkBody = document.getElementById('p_seasonGoalieBody');
+  const skBase = (a, b) => b.points - a.points || b.goals - a.goals || b.assists - a.assists || a.name.localeCompare(b.name);
+  const skList = sortRows(seasonData.skaters, sortState.seasonSkater, SKATER_COLS, skBase);
   skBody.innerHTML = skList.length === 0
     ? '<tr><td colspan="12" style="color:var(--sub);">No skater stats saved for this filter yet.</td></tr>'
     : skList.map(p => `
     <tr>
       <td style="text-align:left;">${p.name}</td><td>${p.number}</td>
-      <td>${p.gp}</td><td>${p.goals}</td><td>${p.assists}</td><td>${p.goals + p.assists}</td>
+      <td>${p.gp}</td><td>${p.goals}</td><td>${p.assists}</td><td>${p.points}</td>
       <td>${p.plusMinus > 0 ? '+' : ''}${p.plusMinus}</td><td>${p.sog}</td><td>${p.pim}</td>
       <td>${p.fow}</td><td>${p.fol}</td><td>${foPct(p.fow, p.fol)}</td>
     </tr>`).join('');
 
-  const gkList = Object.values(goalies).sort((a, b) => b.secs - a.secs || a.name.localeCompare(b.name));
+  const gkBase = (a, b) => b.secs - a.secs || a.name.localeCompare(b.name);
+  const gkList = sortRows(seasonData.goalies, sortState.seasonGoalie, GOALIE_SEASON_COLS, gkBase);
   gkBody.innerHTML = gkList.length === 0
     ? '<tr><td colspan="8" style="color:var(--sub);">No goalie stats saved for this filter yet.</td></tr>'
     : gkList.map(g => `
@@ -1669,6 +1748,10 @@ async function renderSeasonPlayerTotals() {
     </tr>`).join('');
 }
 document.getElementById('p_seasonTypeFilter').addEventListener('change', renderSeasonPlayerTotals);
+wireSortHeaders('p_statsTable', sortState.skater, SKATER_COLS, () => renderSkaterRows(readSkaterRowsFromTable()));
+wireSortHeaders('p_goalieTable', sortState.goalie, GOALIE_GAME_COLS, () => renderGoalieRows(readGoalieRowsFromTable()));
+wireSortHeaders('p_seasonTable', sortState.seasonSkater, SKATER_COLS, paintSeasonTables);
+wireSortHeaders('p_seasonGoalieTable', sortState.seasonGoalie, GOALIE_SEASON_COLS, paintSeasonTables);
 
 /* ===================== GOALS LOG TAB ===================== */
 function goalsFilteredGames() {
