@@ -53,17 +53,17 @@
     <div class="btn-row no-print">
       <button class="primary small" id="lineupsFetchBtn">Fetch Lineups</button>
     </div>
-    <label style="margin-top:10px;">Or upload the lineup file (a PDF fills in the lines automatically; a picture is only displayed)</label>
+    <label style="margin-top:10px;">Or upload the lineup file (a PDF just fills in the lines — the file itself isn't kept or shown; a picture is only displayed)</label>
     <input type="file" accept="image/*,application/pdf" id="combinedPhotoInput" class="no-print">
     <div class="btn-row no-print"><button class="small ghost" id="combinedPhotoRemove">Remove From Both</button></div>
     <div class="hint" id="lineupsStatus"></div>
   </div>
 
   <div class="photo-block no-print" style="border:1px solid var(--line);border-radius:8px;margin-bottom:16px;">
-    <label>Media Kit PDF Link (optional — auto-fills PP/PK stats and rank for both teams below)</label>
+    <label>Media Kit PDF Link (optional — auto-fills PP/PK stats and rank, plus each goalie's record, GAA and SV%, for both teams below)</label>
     <input type="text" id="specialtyTeamsUrl" placeholder="Paste the media kit PDF link here...">
     <div class="btn-row no-print">
-      <button class="primary small" id="specialtyTeamsFetchBtn">Fetch PP/PK</button>
+      <button class="primary small" id="specialtyTeamsFetchBtn">Fetch From Media Kit</button>
     </div>
     <div class="hint" id="specialtyTeamsStatus"></div>
   </div>

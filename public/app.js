@@ -90,6 +90,11 @@ function wireCombinedPhotoUpload() {
     const reader = new FileReader();
     reader.onload = async function (e) {
       const dataUrl = e.target.result;
+      if (dataUrl.startsWith('data:application/pdf')) {
+        // The league lineup PDF is only read for the names and numbers; the file itself isn't saved or shown on the board.
+        runLineupsRequest('/api/parse-lineups', { dataurl: dataUrl });
+        return;
+      }
       applyPhoto('away', dataUrl);
       applyPhoto('home', dataUrl);
       try {
@@ -98,12 +103,8 @@ function wireCombinedPhotoUpload() {
           api('/api/photos/home', { method: 'PUT', body: JSON.stringify({ dataurl: dataUrl }) })
         ]);
       } catch (err) { alert('Could not save the combined file to the server.'); }
-      if (dataUrl.startsWith('data:application/pdf')) {
-        runLineupsRequest('/api/parse-lineups', { dataurl: dataUrl });
-      } else {
-        clearLineupsDebug();
-        document.getElementById('lineupsStatus').textContent = "Picture uploaded and displayed. Pictures can't be read automatically — paste the league lineup PDF link, or upload the PDF itself, to fill in the lines.";
-      }
+      clearLineupsDebug();
+      document.getElementById('lineupsStatus').textContent = "Picture uploaded and displayed. Pictures can't be read automatically — paste the league lineup PDF link, or upload the PDF itself, to fill in the lines.";
     };
     reader.readAsDataURL(file);
   });
@@ -194,6 +195,18 @@ function showLineupsDebug(statusEl, text) {
   statusEl.parentNode.appendChild(note);
 }
 
+// Earlier versions kept the lineup PDF showing inside each team panel. The lines are now filled in directly, so
+// once that has worked, clear any such PDF still sitting there (pictures are left alone).
+async function clearStoredPdfPreviews() {
+  for (const side of ['away', 'home']) {
+    const preview = document.getElementById(side + 'PhotoPreview');
+    if (preview && preview.querySelector('iframe')) {
+      applyPhoto(side, null);
+      try { await api('/api/photos/' + side, { method: 'DELETE' }); } catch (e) { /* already gone */ }
+    }
+  }
+}
+
 async function runLineupsRequest(path, payload) {
   const statusEl = document.getElementById('lineupsStatus');
   clearLineupsDebug();
@@ -211,6 +224,7 @@ async function runLineupsRequest(path, payload) {
   try { filled = fillBoardFromLineups(result); }
   catch (err) { statusEl.textContent = 'Read the file but could not place it on the board — please try again.'; return; }
   if (filled.error) { statusEl.textContent = filled.error; return; }
+  await clearStoredPdfPreviews();
   statusEl.textContent = 'Filled in the lineups for ' + filled.opp.name + ' and ' + filled.ott.name +
     ', plus scratches, officials and the date.' + (filled.notes.length ? ' Note: ' + filled.notes.join('; ') + '.' : '');
 }
@@ -232,14 +246,9 @@ function findSpecialtyTeamRow(rows, typedName) {
 function formatPP(row) { return `GP:${row.gp} ADV:${row.adv} GF:${row.gf} PP%:${row.ppPct.toFixed(1)} SHGA:${row.shga}`; }
 function formatPK(row) { return `GP:${row.gp} TSH:${row.tsh} PPGA:${row.ppga} PK%:${row.pkPct.toFixed(1)} SHGF:${row.shgf}`; }
 
-document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', async () => {
+// The PP/PK half of the media-kit button: returns the message to show.
+async function fillSpecialTeamsFromKit(url) {
   const statusEl = document.getElementById('specialtyTeamsStatus');
-  let url = document.getElementById('specialtyTeamsUrl').value.trim();
-  if (!url) { statusEl.textContent = 'Paste a media kit PDF link first.'; return; }
-  // Strip a PDF-viewer extension wrapper if the person pasted the browser address bar URL directly
-  const wrapperMatch = url.match(/^chrome-extension:\/\/[^/]+\/(https?:\/\/.+)$/i);
-  if (wrapperMatch) url = wrapperMatch[1];
-  statusEl.textContent = 'Fetching and parsing PDF…';
   let result;
   try {
     const res = await fetch('/api/fetch-specialty-teams', {
@@ -247,25 +256,15 @@ document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', asyn
     });
     result = await res.json();
   } catch (err) {
-    statusEl.textContent = 'Could not reach the server to fetch that PDF.';
-    return;
+    return 'Could not reach the server to fetch that PDF.';
   }
   try {
     if (result.error) {
-      statusEl.textContent = result.error;
-      const existingBox = document.getElementById('specialtyTeamsDebug');
-      if (existingBox) existingBox.remove();
-      const existingNote = document.getElementById('specialtyTeamsDebugNote');
-      if (existingNote) existingNote.remove();
       if (result.debugExcerpt) {
         const box = document.createElement('textarea');
         box.id = 'specialtyTeamsDebug';
         box.readOnly = true;
-        box.style.width = '100%';
-        box.style.height = '160px';
-        box.style.fontFamily = 'monospace';
-        box.style.fontSize = '10px';
-        box.style.marginTop = '6px';
+        box.style.cssText = 'width:100%;height:160px;font-family:monospace;font-size:10px;margin-top:6px;';
         box.value = result.debugExcerpt;
         statusEl.parentNode.appendChild(box);
         const note = document.createElement('div');
@@ -274,7 +273,7 @@ document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', asyn
         note.textContent = 'Copy the text above and send it back so the parser can be fixed to match this PDF\'s actual layout.';
         statusEl.parentNode.appendChild(note);
       }
-      return;
+      return result.error;
     }
     const opponentTyped = document.getElementById('boardOpponentName').textContent;
     const oppPP = findSpecialtyTeamRow(result.pp, opponentTyped);
@@ -286,14 +285,129 @@ document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', asyn
     if (oppPK) { document.getElementById('awayPK').textContent = formatPK(oppPK); document.getElementById('awayPKRank').textContent = '#' + oppPK.rank; filled.push('Opponent PK'); }
     if (ottPP) { document.getElementById('homePP').textContent = formatPP(ottPP); document.getElementById('homePPRank').textContent = '#' + ottPP.rank; filled.push("Ottawa PP"); }
     if (ottPK) { document.getElementById('homePK').textContent = formatPK(ottPK); document.getElementById('homePKRank').textContent = '#' + ottPK.rank; filled.push("Ottawa PK"); }
-    if (filled.length === 0) {
-      statusEl.textContent = 'Found the Specialty Team Records section, but couldn\'t match the opponent name — check the Opponent field above and try again.';
-    } else {
-      statusEl.textContent = 'Filled in: ' + filled.join(', ') + (oppPP || oppPK ? '' : ' (opponent not matched — check the Opponent name field)');
-    }
+    if (filled.length === 0) return 'Found the Specialty Team Records section, but couldn\'t match the opponent name — check the Opponent field above and try again.';
+    return 'Filled in: ' + filled.join(', ') + (oppPP || oppPK ? '' : ' (opponent not matched — check the Opponent name field)') + '.';
   } catch (err) {
-    statusEl.textContent = 'Got a response but could not apply it — please try again.';
+    return 'Got a response but could not apply it — please try again.';
   }
+}
+
+/* ===================== GOALIE RECORDS (from the media kit) ===================== */
+// SV% the way hockey prints it (.898); the kit gives 0.898
+function kitSvText(sv) {
+  const v = parseFloat(sv);
+  if (!Number.isFinite(v)) return '—';
+  const t = Math.min(1, v).toFixed(3);
+  return t.startsWith('0') ? t.slice(1) : t;
+}
+// "1-0-1-0 / 2.95 / .898" (W-L-OTL-SL, GAA, SV%). A goalie with no games has no GAA or SV% to quote.
+function goalieRecordText(g) {
+  const rec = `${g.w}-${g.l}-${g.otl}-${g.sl}`;
+  return g.gp > 0 ? `${rec} / ${Number(g.gaa).toFixed(2)} / ${kitSvText(g.svPct)}` : `${rec} / — / —`;
+}
+const goalieNamePieces = name => (name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  .split(/[\s,]+/).map(t => t.replace(/[^a-z]/g, '')).filter(Boolean);
+// Same goalie? Order, accents and hyphens don't matter, and a name that wrapped across lines in the PDF still counts.
+function sameGoalieName(a, b) {
+  const pa = goalieNamePieces(a), pb = goalieNamePieces(b);
+  if (!pa.length || !pb.length) return false;
+  const inside = (pieces, joined) => { const big = pieces.filter(p => p.length >= 3); return big.length > 0 && big.every(p => joined.includes(p)); };
+  return inside(pa, pb.join('')) || inside(pb, pa.join(''));
+}
+// The two goalie rows of a team panel: "#32 Jaeden Nelson" in the first box, the record in the second
+function boardGoalieSlots(panel) {
+  return [...panel.querySelectorAll('.goalies .line-row')].map(row => {
+    const spans = row.querySelectorAll('span[contenteditable]');
+    const text = ((spans[0] && spans[0].textContent) || '').trim();
+    const m = text.match(/^#\s*(\d+)\s*(.*)$/);
+    return { nameEl: spans[0], recEl: spans[1], text, number: m ? parseInt(m[1], 10) : null, name: m ? m[2].trim() : text, placeholder: /^(starter|backup)?$/i.test(text) };
+  }).filter(s => s.nameEl && s.recEl);
+}
+// Which of the kit's goalie tables belongs to this side of the board (null if the tables carry no team names)
+function pickKitTable(teams, isOttawa, opponentTyped) {
+  if (!teams.some(t => t.team)) return null;
+  const isOtt = t => /ottawa|67/i.test(t.team || '');
+  if (isOttawa) return teams.find(isOtt) || null;
+  const typed = (opponentTyped || '').trim().toLowerCase();
+  const byName = typed && teams.find(t => !isOtt(t) && t.team && (t.team.toLowerCase().includes(typed) || typed.includes(t.team.toLowerCase().split(' ')[0])));
+  return byName || teams.find(t => !isOtt(t)) || null;
+}
+// By jersey number first (within the right team's table), but only when the name agrees, so a mix-up between
+// the two teams' tables can never put one goalie's numbers on another goalie.
+function findKitGoalie(pool, slot) {
+  if (slot.number !== null) {
+    const hit = pool.filter(g => Number(g.number) === slot.number).find(g => !g.name || !slot.name || sameGoalieName(g.name, slot.name));
+    if (hit) return hit;
+  }
+  return slot.name ? (pool.find(g => sameGoalieName(g.name, slot.name)) || null) : null;
+}
+function fillGoalieRecords(data, opponentTyped) {
+  const filled = [], missing = []; let named = 0;
+  [['.team-panel.home', true], ['.team-panel.away', false]].forEach(([sel, isOttawa]) => {
+    const table = pickKitTable(data.teams, isOttawa, opponentTyped);
+    const pool = table ? table.goalies : data.teams.flatMap(t => t.goalies);
+    boardGoalieSlots(document.querySelector(sel)).forEach(slot => {
+      if (slot.placeholder) return;                       // no goalie named on the board yet
+      named++;
+      const hit = findKitGoalie(pool, slot);
+      if (hit) { slot.recEl.textContent = goalieRecordText(hit); filled.push(slot.text); } else missing.push(slot.text);
+    });
+  });
+  return { filled, missing, named };
+}
+function clearGoalieDebug() {
+  const b = document.getElementById('goalieRecordsDebug'); if (b) b.remove();
+  const n = document.getElementById('goalieRecordsDebugNote'); if (n) n.remove();
+}
+// The goalie half of the media-kit button: returns the message to show.
+async function fillGoalieRecordsFromKit(url) {
+  const statusEl = document.getElementById('specialtyTeamsStatus');
+  let res, data;
+  try {
+    res = await fetch('/api/fetch-goalie-records', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+  } catch (err) { return 'Goalie records: could not reach the server.'; }
+  if (res.status === 404) return "Goalie records: the server doesn't have the new goalie file yet (mediakit-goalies.js) — see the update notes.";
+  try { data = await res.json(); } catch (err) { return 'Goalie records: the server sent back something unexpected.'; }
+  if (data.error) {
+    if (data.debugExcerpt) {
+      const box = document.createElement('textarea');
+      box.id = 'goalieRecordsDebug';
+      box.readOnly = true;
+      box.style.cssText = 'width:100%;height:160px;font-family:monospace;font-size:10px;margin-top:6px;';
+      box.value = data.debugExcerpt;
+      statusEl.parentNode.appendChild(box);
+      const note = document.createElement('div');
+      note.id = 'goalieRecordsDebugNote';
+      note.className = 'hint';
+      note.textContent = "Copy the goalie text above and send it back so the reader can be fixed to match this PDF's actual layout.";
+      statusEl.parentNode.appendChild(note);
+    }
+    return 'Goalie records: ' + data.error;
+  }
+  let out;
+  try { out = fillGoalieRecords(data, document.getElementById('boardOpponentName').textContent); }
+  catch (err) { return 'Goalie records: got the data but could not place it on the board.'; }
+  if (out.named === 0) return 'Goalie records: load the lineups first, so the board knows which goalies to look up.';
+  let msg = out.filled.length ? 'Goalie records filled in for ' + out.filled.join(', ') + '.' : 'Goalie records: none of the goalies on the board were found in the media kit.';
+  if (out.missing.length) msg += " Couldn't find " + out.missing.join(', ') + ' in the media kit.';
+  const skipped = (data.teams || []).reduce((n, t) => n + (t.skipped || 0), 0);
+  if (skipped) msg += ` (${skipped} goalie row${skipped === 1 ? '' : 's'} in the kit couldn't be read reliably and ${skipped === 1 ? 'was' : 'were'} left out.)`;
+  return msg;
+}
+
+document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('specialtyTeamsStatus');
+  let url = document.getElementById('specialtyTeamsUrl').value.trim();
+  if (!url) { statusEl.textContent = 'Paste a media kit PDF link first.'; return; }
+  // Strip a PDF-viewer extension wrapper if the person pasted the browser address bar URL directly
+  const wrapperMatch = url.match(/^chrome-extension:\/\/[^/]+\/(https?:\/\/.+)$/i);
+  if (wrapperMatch) url = wrapperMatch[1];
+  statusEl.textContent = 'Reading the media kit…';
+  ['specialtyTeamsDebug', 'specialtyTeamsDebugNote'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
+  clearGoalieDebug();
+  // The two halves are independent: one failing never stops the other
+  const [ppMsg, goalieMsg] = await Promise.all([fillSpecialTeamsFromKit(url), fillGoalieRecordsFromKit(url)]);
+  statusEl.textContent = [ppMsg, goalieMsg].filter(Boolean).join(' ');
 });
 
 
