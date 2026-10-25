@@ -700,6 +700,7 @@ app.post('/api/parse-lineups', async (req, res) => {
   }
 });
 
+require("./mediakit-goalies")(app, pdfParse);
 app.listen(PORT, () => {
   console.log(`Ottawa 67's Broadcast Toolkit running on port ${PORT}`);
 });
