@@ -395,6 +395,45 @@ async function fillGoalieRecordsFromKit(url) {
   return msg;
 }
 
+/* ===================== COACHES, TEAM RECORDS, PREVIOUS & UPCOMING (from the media kit) ===================== */
+// "10-4-0-1 · 21 pts · 1st East"
+function teamRecordText(t) {
+  return [t.record, t.points != null ? t.points + ' pts' : null, t.division].filter(Boolean).join(' · ');
+}
+
+// Fill one team's four Previous or Next boxes; boxes left over are emptied so last game's entries don't linger.
+function fillGameBoxes(prefix, games) {
+  for (let i = 1; i <= 4; i++) {
+    const el = document.getElementById(prefix + i);
+    if (el) el.textContent = games[i - 1] || '';
+  }
+}
+
+async function fillGamePrepFromKit(url) {
+  let res, data;
+  try {
+    res = await fetch('/api/fetch-game-prep', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url }) });
+  } catch (err) { return 'Coaches and records: could not reach the server.'; }
+  if (res.status === 404) return "Coaches and records: the server doesn't have the new media kit file yet (mediakit-prep.js) — see the update notes.";
+  try { data = await res.json(); } catch (err) { return 'Coaches and records: the server sent back something unexpected.'; }
+  if (data.error) return 'Coaches and records: ' + data.error;
+  // Ottawa always sits on the right of the board, whichever column the kit lists them in.
+  const ott = data.teams.find(t => /ottawa|67/i.test(t.team));
+  const opp = data.teams.find(t => t !== ott);
+  if (!ott || !opp) return "Coaches and records: couldn't tell which team in the media kit is Ottawa.";
+  const filled = [];
+  [[opp, 'Opp'], [ott, 'Ott']].forEach(([t, side]) => {
+    if (t.coach) { document.getElementById('boardCoach' + side).textContent = t.coach; filled.push('coach'); }
+    if (t.record) { document.getElementById('boardRecord' + side).textContent = teamRecordText(t); filled.push('record'); }
+    if (t.scheduleFound) { fillGameBoxes('prev' + side, t.prev); fillGameBoxes('next' + side, t.next); filled.push('games'); }
+  });
+  if (!filled.length) return 'Coaches and records: nothing found in the media kit.';
+  const missing = [];
+  if (!opp.coach || !ott.coach) missing.push('a head coach');
+  if (!opp.scheduleFound || !ott.scheduleFound) missing.push("a team's schedule");
+  return 'Head coaches, team records and previous/upcoming games filled in.' + (missing.length ? " Couldn't find " + missing.join(' or ') + ' in the media kit.' : '');
+}
+
 document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', async () => {
   const statusEl = document.getElementById('specialtyTeamsStatus');
   let url = document.getElementById('specialtyTeamsUrl').value.trim();
@@ -406,8 +445,8 @@ document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', asyn
   ['specialtyTeamsDebug', 'specialtyTeamsDebugNote'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
   clearGoalieDebug();
   // The two halves are independent: one failing never stops the other
-  const [ppMsg, goalieMsg] = await Promise.all([fillSpecialTeamsFromKit(url), fillGoalieRecordsFromKit(url)]);
-  statusEl.textContent = [ppMsg, goalieMsg].filter(Boolean).join(' ');
+  const [prepMsg, ppMsg, goalieMsg] = await Promise.all([fillGamePrepFromKit(url), fillSpecialTeamsFromKit(url), fillGoalieRecordsFromKit(url)]);
+  statusEl.textContent = [prepMsg, ppMsg, goalieMsg].filter(Boolean).join(' ');
 });
 
 
