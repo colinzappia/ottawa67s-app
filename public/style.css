@@ -46,6 +46,7 @@ textarea{resize:vertical;min-height:50px;}
 .team-panel.home .team-header{background:var(--home);}
 .team-header{color:white;padding:8px 12px;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;display:flex;justify-content:space-between;align-items:center;}
 .team-header [contenteditable]{outline:none;}
+.team-header [contenteditable]+[contenteditable]{font-size:12px;text-align:right;margin-left:10px;}
 .section-label{background:var(--panel);font-size:10px;text-transform:uppercase;color:var(--sub);letter-spacing:0.5px;padding:4px 12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);font-weight:700;}
 .line-row{display:grid;grid-template-columns:28px 1fr 1fr 1fr;gap:4px;padding:4px 12px;font-size:12px;border-bottom:1px solid #f0f0f0;}
 .line-row .tag{color:var(--sub);font-weight:700;font-size:10px;align-self:center;}
