@@ -11,6 +11,22 @@
   th.sortable.sorted-asc::after { content: " \25B2"; font-size: 8px; color: var(--brand); }
   th.sortable.sorted-desc::after { content: " \25BC"; font-size: 8px; color: var(--brand); }
   table.stats-table tfoot td { font-weight: 800; background: var(--panel); border-top: 2px solid var(--ink); }
+  /* game-prep sections (from the prep sheet) */
+  .startfive .line-row.two { grid-template-columns: 28px 1fr 1fr; }
+  .prep-section { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+  .prep-title { background: var(--brand); color: #fff; padding: 6px 12px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .prep-body { padding: 10px 12px; }
+  .prep-coltitle { font-size: 10px; text-transform: uppercase; color: var(--sub); font-weight: 700; letter-spacing: 0.3px; margin-bottom: 4px; }
+  .prep-cell { min-height: 26px; padding: 4px 8px; margin-bottom: 4px; border: 1px solid var(--line); border-radius: 5px; background: #fff; font-size: 12.5px; outline: none; }
+  .prep-cell:focus { border-color: var(--sub); background: #fffbea; }
+  .prep-big { min-height: 80px; margin-bottom: 0; }
+  .prep-kp { display: grid; grid-template-columns: 1fr 2.2fr; gap: 8px; }
+  .prep-colhead { font-size: 10px; text-transform: uppercase; color: var(--sub); font-weight: 700; letter-spacing: 0.3px; margin-bottom: 4px; }
+  .prep-grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .prep-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  [data-ph]:empty::before { content: attr(data-ph); color: #9ca3af; font-weight: 400; }
+  @media print { [data-ph]:empty::before { content: ''; } }
+  @media (max-width: 700px) { .prep-grid4 { grid-template-columns: 1fr 1fr; } .prep-grid2 { grid-template-columns: 1fr; } .prep-kp { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -37,12 +53,14 @@
       <img id="awayLogoPreview" class="board-logo-img">
       <div class="btn-row no-print"><button class="small ghost" id="awayLogoRemove">Remove Logo</button></div>
       <div class="meta-box"><label>Opponent</label><div contenteditable="true" id="boardOpponentName">Opponent Team Name</div></div>
+      <div class="meta-box"><label>Head Coach</label><div contenteditable="true" id="boardCoachOpp" data-ph="Name"></div></div>
     </div>
     <div class="board-team-block">
       <input type="file" accept="image/*" id="homeLogoInput" class="no-print">
       <img id="homeLogoPreview" class="board-logo-img">
       <div class="btn-row no-print"><button class="small ghost" id="homeLogoRemove">Remove Logo</button></div>
       <div class="meta-box"><label>Ottawa 67's</label><div contenteditable="true">Ottawa 67's</div></div>
+      <div class="meta-box"><label>Head Coach</label><div contenteditable="true" id="boardCoachOtt" data-ph="Name"></div></div>
     </div>
   </div>
   <div class="hint" style="margin-top:-10px;margin-bottom:14px;">Ottawa always sits on the right so their logo stays put game to game — swap the opponent's name and logo on the left each time, regardless of who's actually hosting.</div>
@@ -84,6 +102,11 @@
   <div class="teams">
     <div class="team-panel away">
       <div class="team-header"><span contenteditable="true">OPPONENT</span><span contenteditable="true">Record</span></div>
+      <div class="section-label">Starting Five</div>
+      <div class="startfive">
+        <div class="line-row"><span class="tag">F</span><span contenteditable="true" id="awayStartLW">LW</span><span contenteditable="true" id="awayStartC">C</span><span contenteditable="true" id="awayStartRW">RW</span></div>
+        <div class="line-row two"><span class="tag">D</span><span contenteditable="true" id="awayStartLD">LD</span><span contenteditable="true" id="awayStartRD">RD</span></div>
+      </div>
       <div class="section-label">Forward Lines</div>
       <div class="line-row"><span class="tag">L1</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
       <div class="line-row"><span class="tag">L2</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
@@ -115,6 +138,11 @@
 
     <div class="team-panel home">
       <div class="team-header"><span contenteditable="true">OTTAWA 67'S</span><span contenteditable="true">Record</span></div>
+      <div class="section-label">Starting Five</div>
+      <div class="startfive">
+        <div class="line-row"><span class="tag">F</span><span contenteditable="true" id="homeStartLW">LW</span><span contenteditable="true" id="homeStartC">C</span><span contenteditable="true" id="homeStartRW">RW</span></div>
+        <div class="line-row two"><span class="tag">D</span><span contenteditable="true" id="homeStartLD">LD</span><span contenteditable="true" id="homeStartRD">RD</span></div>
+      </div>
       <div class="section-label">Forward Lines</div>
       <div class="line-row"><span class="tag">L1</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
       <div class="line-row"><span class="tag">L2</span><span contenteditable="true">LW</span><span contenteditable="true">C</span><span contenteditable="true">RW</span></div>
@@ -143,6 +171,61 @@
         <div class="btn-row"><button class="small ghost" id="homePhotoRemove">Remove Photo</button></div>
       </div>
     </div>
+  </div>
+
+  <div class="prep-section">
+    <div class="prep-title">Opponent Key Players</div>
+    <div class="prep-body">
+      <div class="prep-kp prep-colhead"><div>Player</div><div>Note</div></div>
+      <div class="prep-kp"><div class="prep-cell" contenteditable="true" id="keyPlayer1" data-ph="Player"></div><div class="prep-cell" contenteditable="true" id="keyNote1" data-ph="Note"></div></div>
+      <div class="prep-kp"><div class="prep-cell" contenteditable="true" id="keyPlayer2" data-ph="Player"></div><div class="prep-cell" contenteditable="true" id="keyNote2" data-ph="Note"></div></div>
+      <div class="prep-kp"><div class="prep-cell" contenteditable="true" id="keyPlayer3" data-ph="Player"></div><div class="prep-cell" contenteditable="true" id="keyNote3" data-ph="Note"></div></div>
+      <div class="prep-kp"><div class="prep-cell" contenteditable="true" id="keyPlayer4" data-ph="Player"></div><div class="prep-cell" contenteditable="true" id="keyNote4" data-ph="Note"></div></div>
+      <div class="prep-kp"><div class="prep-cell" contenteditable="true" id="keyPlayer5" data-ph="Player"></div><div class="prep-cell" contenteditable="true" id="keyNote5" data-ph="Note"></div></div>
+      <div class="prep-kp"><div class="prep-cell" contenteditable="true" id="keyPlayer6" data-ph="Player"></div><div class="prep-cell" contenteditable="true" id="keyNote6" data-ph="Note"></div></div>
+    </div>
+  </div>
+
+  <div class="prep-section">
+    <div class="prep-title">Previous Week &amp; Upcoming</div>
+    <div class="prep-body"><div class="prep-grid4">
+      <div>
+        <div class="prep-coltitle">Opponent Prev</div>
+        <div class="prep-cell" contenteditable="true" id="prevOpp1" data-ph="e.g. W 6-3 at Peterborough"></div>
+        <div class="prep-cell" contenteditable="true" id="prevOpp2" data-ph="e.g. W 6-3 at Peterborough"></div>
+        <div class="prep-cell" contenteditable="true" id="prevOpp3" data-ph="e.g. W 6-3 at Peterborough"></div>
+        <div class="prep-cell" contenteditable="true" id="prevOpp4" data-ph="e.g. W 6-3 at Peterborough"></div>
+      </div>
+      <div>
+        <div class="prep-coltitle">67's Prev</div>
+        <div class="prep-cell" contenteditable="true" id="prevOtt1" data-ph="e.g. W 4-1 at Oshawa"></div>
+        <div class="prep-cell" contenteditable="true" id="prevOtt2" data-ph="e.g. W 4-1 at Oshawa"></div>
+        <div class="prep-cell" contenteditable="true" id="prevOtt3" data-ph="e.g. W 4-1 at Oshawa"></div>
+        <div class="prep-cell" contenteditable="true" id="prevOtt4" data-ph="e.g. W 4-1 at Oshawa"></div>
+      </div>
+      <div>
+        <div class="prep-coltitle">Opponent Next</div>
+        <div class="prep-cell" contenteditable="true" id="nextOpp1" data-ph="e.g. Oct 17 at Flint"></div>
+        <div class="prep-cell" contenteditable="true" id="nextOpp2" data-ph="e.g. Oct 17 at Flint"></div>
+        <div class="prep-cell" contenteditable="true" id="nextOpp3" data-ph="e.g. Oct 17 at Flint"></div>
+        <div class="prep-cell" contenteditable="true" id="nextOpp4" data-ph="e.g. Oct 17 at Flint"></div>
+      </div>
+      <div>
+        <div class="prep-coltitle">67's Next</div>
+        <div class="prep-cell" contenteditable="true" id="nextOtt1" data-ph="e.g. Oct 17 vs Oshawa, 7:00"></div>
+        <div class="prep-cell" contenteditable="true" id="nextOtt2" data-ph="e.g. Oct 17 vs Oshawa, 7:00"></div>
+        <div class="prep-cell" contenteditable="true" id="nextOtt3" data-ph="e.g. Oct 17 vs Oshawa, 7:00"></div>
+        <div class="prep-cell" contenteditable="true" id="nextOtt4" data-ph="e.g. Oct 17 vs Oshawa, 7:00"></div>
+      </div>
+    </div></div>
+  </div>
+
+  <div class="prep-section">
+    <div class="prep-title">Injuries / Suspensions</div>
+    <div class="prep-body"><div class="prep-grid2">
+      <div><div class="prep-coltitle">Opponent</div><div class="prep-cell prep-big" contenteditable="true" id="boardInjOpp" data-ph="Injuries, suspensions"></div></div>
+      <div><div class="prep-coltitle">Ottawa 67's</div><div class="prep-cell prep-big" contenteditable="true" id="boardInjOtt" data-ph="Injuries, suspensions"></div></div>
+    </div></div>
   </div>
 
   <div class="notes-grid">
