@@ -78,7 +78,7 @@
   </div>
 
   <div class="photo-block no-print" style="border:1px solid var(--line);border-radius:8px;margin-bottom:16px;">
-    <label>Media Kit PDF Link (optional — auto-fills PP/PK stats and rank, plus each goalie's record, GAA and SV%, for both teams below)</label>
+    <label>Media Kit PDF Link (optional — auto-fills head coaches, team records, previous and upcoming games, PP/PK stats and rank, plus each goalie's record, GAA and SV%, for both teams below)</label>
     <input type="text" id="specialtyTeamsUrl" placeholder="Paste the media kit PDF link here...">
     <div class="btn-row no-print">
       <button class="primary small" id="specialtyTeamsFetchBtn">Fetch From Media Kit</button>
@@ -101,7 +101,7 @@
 
   <div class="teams">
     <div class="team-panel away">
-      <div class="team-header"><span contenteditable="true">OPPONENT</span><span contenteditable="true">Record</span></div>
+      <div class="team-header"><span contenteditable="true">OPPONENT</span><span contenteditable="true" id="boardRecordOpp">Record</span></div>
       <div class="section-label">Starting Five</div>
       <div class="startfive">
         <div class="line-row"><span class="tag">F</span><span contenteditable="true" id="awayStartLW">LW</span><span contenteditable="true" id="awayStartC">C</span><span contenteditable="true" id="awayStartRW">RW</span></div>
@@ -137,7 +137,7 @@
     </div>
 
     <div class="team-panel home">
-      <div class="team-header"><span contenteditable="true">OTTAWA 67'S</span><span contenteditable="true">Record</span></div>
+      <div class="team-header"><span contenteditable="true">OTTAWA 67'S</span><span contenteditable="true" id="boardRecordOtt">Record</span></div>
       <div class="section-label">Starting Five</div>
       <div class="startfive">
         <div class="line-row"><span class="tag">F</span><span contenteditable="true" id="homeStartLW">LW</span><span contenteditable="true" id="homeStartC">C</span><span contenteditable="true" id="homeStartRW">RW</span></div>
