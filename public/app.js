@@ -149,6 +149,17 @@ function fillTeamPanelFromLineup(panel, team) {
   return notes;
 }
 
+/* ===================== OPPONENT NAME ===================== */
+// The opponent's lineup panel is headed with the opponent's name, kept in step with the Opponent box at the top of the
+// board however that box gets filled (typed, the lineup PDF, or the media kit).
+const OPPONENT_NAME_PLACEHOLDER = 'Opponent Team Name';
+function syncOpponentHeader() {
+  const name = document.getElementById('boardOpponentName').textContent.trim();
+  const oppHeader = document.querySelector('.team-panel.away .team-header span[contenteditable]');
+  if (oppHeader) oppHeader.textContent = (name && name !== OPPONENT_NAME_PLACEHOLDER ? name : 'Opponent').toUpperCase();
+}
+document.getElementById('boardOpponentName').addEventListener('input', syncOpponentHeader);
+
 function fillBoardFromLineups(data) {
   const ott = data.teams.find(t => t.isOttawa);
   const opp = data.teams.find(t => !t.isOttawa);
@@ -158,8 +169,7 @@ function fillBoardFromLineups(data) {
   fillTeamPanelFromLineup(document.querySelector('.team-panel.home'), ott).forEach(n => notes.push(ott.name + ' has ' + n + ' that the board has no slot for'));
 
   document.getElementById('boardOpponentName').textContent = opp.name;
-  const oppHeader = document.querySelector('.team-panel.away .team-header span[contenteditable]');
-  if (oppHeader) oppHeader.textContent = opp.name.toUpperCase();
+  syncOpponentHeader();
 
   if (data.game && data.game.date) {
     const [y, m, d] = data.game.date.split('-').map(Number);
@@ -396,9 +406,9 @@ async function fillGoalieRecordsFromKit(url) {
 }
 
 /* ===================== COACHES, TEAM RECORDS, PREVIOUS & UPCOMING (from the media kit) ===================== */
-// "10-4-0-1 · 21 pts · 1st East"
+// "10-4-0-1 · 21 pts · 1st East · 1st Eastern Conf" (division, then conference)
 function teamRecordText(t) {
-  return [t.record, t.points != null ? t.points + ' pts' : null, t.division].filter(Boolean).join(' · ');
+  return [t.record, t.points != null ? t.points + ' pts' : null, t.division, t.conference && t.conference + ' Conf'].filter(Boolean).join(' · ');
 }
 
 // Fill one team's four Previous or Next boxes; boxes left over are emptied so last game's entries don't linger.
@@ -421,6 +431,9 @@ async function fillGamePrepFromKit(url) {
   const ott = data.teams.find(t => /ottawa|67/i.test(t.team));
   const opp = data.teams.find(t => t !== ott);
   if (!ott || !opp) return "Coaches and records: couldn't tell which team in the media kit is Ottawa.";
+  // Fill in the opponent's name if it hasn't been typed yet (the lineup panel's heading follows it).
+  const oppNameEl = document.getElementById('boardOpponentName');
+  if (!oppNameEl.textContent.trim() || oppNameEl.textContent.trim() === OPPONENT_NAME_PLACEHOLDER) { oppNameEl.textContent = opp.team; syncOpponentHeader(); }
   const filled = [];
   [[opp, 'Opp'], [ott, 'Ott']].forEach(([t, side]) => {
     if (t.coach) { document.getElementById('boardCoach' + side).textContent = t.coach; filled.push('coach'); }
@@ -444,8 +457,10 @@ document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', asyn
   statusEl.textContent = 'Reading the media kit…';
   ['specialtyTeamsDebug', 'specialtyTeamsDebugNote'].forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
   clearGoalieDebug();
-  // The two halves are independent: one failing never stops the other
-  const [prepMsg, ppMsg, goalieMsg] = await Promise.all([fillGamePrepFromKit(url), fillSpecialTeamsFromKit(url), fillGoalieRecordsFromKit(url)]);
+  // The parts are independent: one failing never stops the others. Coaches and records go first, since they fill in
+  // the opponent's name, which the PP/PK and goalie parts use to find the opponent.
+  const prepMsg = await fillGamePrepFromKit(url);
+  const [ppMsg, goalieMsg] = await Promise.all([fillSpecialTeamsFromKit(url), fillGoalieRecordsFromKit(url)]);
   statusEl.textContent = [prepMsg, ppMsg, goalieMsg].filter(Boolean).join(' ');
 });
 

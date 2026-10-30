@@ -2,11 +2,11 @@
 // Reads the game-prep details from the league's game media kit PDF:
 //   - each team's head coach            ("Team Staff" on the Pre-Game page, one column per team)
 //   - each team's record                (Pre-Game page title "Brantford Bulldogs (10-4-0-1) vs. Ottawa 67's (8-3-2-0)",
-//                                         plus points and division rank from the Head to Head "Match Up" table)
+//                                         plus points and division and conference rank from the Head to Head "Match Up" table)
 //   - each team's last and next games   (the "<Team> 2026-27 Regular Season Game Schedule" pages)
 //
 // Loaded from server.js with one line:   require('./mediakit-prep')(app, pdfParse);
-// It adds   POST /api/fetch-game-prep   { url }   ->   { gameDate, teams: [ { team, coach, record, points, division, prev: [...], next: [...] }, ... ] }
+// It adds   POST /api/fetch-game-prep   { url }   ->   { gameDate, teams: [ { team, coach, record, points, division, conference, prev: [...], next: [...] }, ... ] }
 // The first team is the one listed first in the kit (the left-hand column); the app decides which one is Ottawa.
 
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
@@ -95,7 +95,7 @@ function findCoaches(pages) {
   return out;
 }
 
-/* ---------- points and division rank (Head to Head "Match Up" table: a label, then one cell per team) ---------- */
+/* ---------- points, division and conference rank (Head to Head "Match Up" table: a label, then one cell per team) ---------- */
 function findMatchUp(pages, teams) {
   const out = [{}, {}];
   for (const p of pages) {
@@ -116,6 +116,8 @@ function findMatchUp(pages, teams) {
         });
       } else if (/^Division Ranking$/i.test(label)) {
         cells.forEach((c, i) => { out[order[i]].division = c; });
+      } else if (/^Conference Ranking$/i.test(label)) {
+        cells.forEach((c, i) => { out[order[i]].conference = c; });
       }
     }
     break;
@@ -179,6 +181,7 @@ function parseGamePrep(pages) {
       record: matchUp[i].record || t.record,
       points: matchUp[i].points != null ? matchUp[i].points : null,
       division: matchUp[i].division || null,
+      conference: matchUp[i].conference || null,
       prev: sched ? sched.played.slice(-GAMES_SHOWN).reverse().map(prevText) : [],   // most recent first
       next: upcoming.slice(0, GAMES_SHOWN).map(nextText),
       scheduleFound: !!sched
