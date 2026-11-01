@@ -49,21 +49,14 @@
 
   <div class="board-header">
     <div class="board-team-block">
-      <input type="file" accept="image/*" id="awayLogoInput" class="no-print">
-      <img id="awayLogoPreview" class="board-logo-img">
-      <div class="btn-row no-print"><button class="small ghost" id="awayLogoRemove">Remove Logo</button></div>
       <div class="meta-box"><label>Opponent</label><div contenteditable="true" id="boardOpponentName">Opponent Team Name</div></div>
       <div class="meta-box"><label>Head Coach</label><div contenteditable="true" id="boardCoachOpp" data-ph="Name"></div></div>
     </div>
     <div class="board-team-block">
-      <input type="file" accept="image/*" id="homeLogoInput" class="no-print">
-      <img id="homeLogoPreview" class="board-logo-img">
-      <div class="btn-row no-print"><button class="small ghost" id="homeLogoRemove">Remove Logo</button></div>
       <div class="meta-box"><label>Ottawa 67's</label><div contenteditable="true">Ottawa 67's</div></div>
       <div class="meta-box"><label>Head Coach</label><div contenteditable="true" id="boardCoachOtt" data-ph="Name"></div></div>
     </div>
   </div>
-  <div class="hint" style="margin-top:-10px;margin-bottom:14px;">Ottawa always sits on the right so their logo stays put game to game — swap the opponent's name and logo on the left each time, regardless of who's actually hosting.</div>
 
   <div class="photo-block no-print" style="border:1px solid var(--line);border-radius:8px;margin-bottom:16px;">
     <label>Game Lineups (optional — the league's lineup PDF fills in both teams' lines with numbers and full names, plus scratches, officials and the date)</label>
@@ -71,9 +64,8 @@
     <div class="btn-row no-print">
       <button class="primary small" id="lineupsFetchBtn">Fetch Lineups</button>
     </div>
-    <label style="margin-top:10px;">Or upload the lineup file (a PDF just fills in the lines — the file itself isn't kept or shown; a picture is only displayed)</label>
-    <input type="file" accept="image/*,application/pdf" id="combinedPhotoInput" class="no-print">
-    <div class="btn-row no-print"><button class="small ghost" id="combinedPhotoRemove">Remove From Both</button></div>
+    <label style="margin-top:10px;">Or upload the lineup PDF (it just fills in the lines — the file itself isn't kept or shown)</label>
+    <input type="file" accept="application/pdf" id="combinedPhotoInput" class="no-print">
     <div class="hint" id="lineupsStatus"></div>
   </div>
 
@@ -128,12 +120,6 @@
         <div class="line-row"><span class="tag">PP</span><span contenteditable="true" id="awayPP">GP/ADV/GF/PP%/SHGA</span><span contenteditable="true" id="awayPPRank">Rank #</span></div>
         <div class="line-row"><span class="tag">PK</span><span contenteditable="true" id="awayPK">GP/TSH/PPGA/PK%/SHGF</span><span contenteditable="true" id="awayPKRank">Rank #</span></div>
       </div>
-      <div class="photo-block no-print">
-        <label>Lines Photo (optional)</label>
-        <input type="file" accept="image/*,application/pdf" id="awayPhotoInput">
-        <div id="awayPhotoPreview" class="photo-preview"></div>
-        <div class="btn-row"><button class="small ghost" id="awayPhotoRemove">Remove Photo</button></div>
-      </div>
     </div>
 
     <div class="team-panel home">
@@ -163,12 +149,6 @@
       <div class="specialteams">
         <div class="line-row"><span class="tag">PP</span><span contenteditable="true" id="homePP">GP/ADV/GF/PP%/SHGA</span><span contenteditable="true" id="homePPRank">Rank #</span></div>
         <div class="line-row"><span class="tag">PK</span><span contenteditable="true" id="homePK">GP/TSH/PPGA/PK%/SHGF</span><span contenteditable="true" id="homePKRank">Rank #</span></div>
-      </div>
-      <div class="photo-block no-print">
-        <label>Lines Photo (optional)</label>
-        <input type="file" accept="image/*,application/pdf" id="homePhotoInput">
-        <div id="homePhotoPreview" class="photo-preview"></div>
-        <div class="btn-row"><button class="small ghost" id="homePhotoRemove">Remove Photo</button></div>
       </div>
     </div>
   </div>
