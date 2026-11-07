@@ -182,6 +182,13 @@ document.getElementById('lineupsFetchBtn').addEventListener('click', () => {
   runLineupsRequest('/api/fetch-lineups', { url });
 });
 
+// "Windsor" matches "Windsor Spitfires"; accents, dots and capitals don't matter ("Sault Ste Marie" = "Sault Ste. Marie").
+const teamNameKey = n => (n || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function sameTeamName(a, b) {
+  const x = teamNameKey(a), y = teamNameKey(b);
+  if (x.length < 3 || y.length < 3) return false;
+  return x === y || x.includes(y) || y.includes(x);
+}
 function findSpecialtyTeamRow(rows, typedName) {
   const typed = (typedName || '').trim().toLowerCase();
   if (!typed) return null;
@@ -368,23 +375,40 @@ async function fillGamePrepFromKit(url) {
   if (res.status === 404) return "Coaches and records: the server doesn't have the new media kit file yet (mediakit-prep.js) — see the update notes.";
   try { data = await res.json(); } catch (err) { return 'Coaches and records: the server sent back something unexpected.'; }
   if (data.error) return 'Coaches and records: ' + data.error;
+  if (!Array.isArray(data.teams) || !data.teams.length) return "Coaches and records: the media kit didn't have any teams in it.";
   // Ottawa always sits on the right of the board, whichever column the kit lists them in.
-  const ott = data.teams.find(t => /ottawa|67/i.test(t.team));
-  const opp = data.teams.find(t => t !== ott);
-  if (!ott || !opp) return "Coaches and records: couldn't tell which team in the media kit is Ottawa.";
+  const ott = data.teams.find(t => /ottawa|67/i.test(t.team)) || null;
+  let opp;
+  if (ott) {
+    opp = data.teams.find(t => t !== ott);
+  } else {
+    // A kit for a game Ottawa isn't in (looking ahead at another team): use the kit team that matches the Opponent box.
+    const typed = document.getElementById('boardOpponentName').textContent.trim();
+    const hasTyped = typed && typed !== OPPONENT_NAME_PLACEHOLDER;
+    const names = data.teams.map(t => t.team).join(' and ');
+    opp = hasTyped ? data.teams.find(t => sameTeamName(t.team, typed)) : null;
+    if (!opp) {
+      return hasTyped
+        ? `Coaches and records: this media kit is for ${names}, with no Ottawa game, and neither matches the Opponent name "${typed}".`
+        : `Coaches and records: this media kit is for ${names}, with no Ottawa game. Type the team's name in the Opponent box and click again.`;
+    }
+  }
+  if (!opp) return "Coaches and records: couldn't tell which team in the media kit is the opponent.";
   // Fill in the opponent's name if it hasn't been typed yet (the lineup panel's heading follows it).
   fillOpponentName(opp.team);
   const filled = [];
-  [[opp, 'Opp'], [ott, 'Ott']].forEach(([t, side]) => {
+  (ott ? [[opp, 'Opp'], [ott, 'Ott']] : [[opp, 'Opp']]).forEach(([t, side]) => {
     if (t.coach) { document.getElementById('boardCoach' + side).textContent = t.coach; filled.push('coach'); }
     if (t.record) { document.getElementById('boardRecord' + side).textContent = teamRecordText(t); filled.push('record'); }
     if (t.scheduleFound) { fillGameBoxes('prev' + side, t.prev); fillGameBoxes('next' + side, t.next); filled.push('games'); }
   });
   if (!filled.length) return 'Coaches and records: nothing found in the media kit.';
   const missing = [];
-  if (!opp.coach || !ott.coach) missing.push('a head coach');
-  if (!opp.scheduleFound || !ott.scheduleFound) missing.push("a team's schedule");
-  return 'Head coaches, team records and previous/upcoming games filled in.' + (missing.length ? " Couldn't find " + missing.join(' or ') + ' in the media kit.' : '');
+  if (!opp.coach || (ott && !ott.coach)) missing.push('a head coach');
+  if (!opp.scheduleFound || (ott && !ott.scheduleFound)) missing.push("a team's schedule");
+  const gaps = missing.length ? " Couldn't find " + missing.join(' or ') + ' in the media kit.' : '';
+  if (!ott) return `Head coach, record and previous/upcoming games filled in for ${opp.team}. This kit has no Ottawa game, so the Ottawa side was left alone.` + gaps;
+  return 'Head coaches, team records and previous/upcoming games filled in.' + gaps;
 }
 
 document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', async () => {
