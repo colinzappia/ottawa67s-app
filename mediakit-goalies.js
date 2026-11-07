@@ -5,6 +5,7 @@
 // Loaded from server.js with one line:   require('./mediakit-goalies')(app, pdfParse);
 // It adds   POST /api/fetch-goalie-records   { url }   ->   { teams: [ { team, goalies: [ {...} ] }, ... ] }
 
+const { downloadKit } = require('./kit-cache');
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 
 /* ---------- reading the PDF so table cells keep their gaps ---------- */
@@ -207,9 +208,9 @@ function register(app, pdfParse) {
     const url = req.body && req.body.url;
     if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'A valid http(s) URL is required.' });
     try {
-      const pdfRes = await fetch(url, { headers: { 'User-Agent': BROWSER_UA } });
-      if (!pdfRes.ok) return res.status(502).json({ error: 'Could not download the PDF (status ' + pdfRes.status + ').' });
-      const out = await extractGoalieRecords(pdfParse, Buffer.from(await pdfRes.arrayBuffer()));
+      let kit;
+      try { kit = await downloadKit(url); } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
+      const out = await extractGoalieRecords(pdfParse, kit);
       if (out.error) return res.status(out.status).json({ error: out.error, debugExcerpt: out.debugExcerpt });
       res.json({ teams: out.teams });
     } catch (err) {

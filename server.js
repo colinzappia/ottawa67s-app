@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
 const pdfParse = require('pdf-parse');
+const { downloadKit } = require('./kit-cache');
 const db = require('./db');
 
 const app = express();
@@ -372,11 +373,8 @@ app.post('/api/fetch-specialty-teams', async (req, res) => {
   const { url } = req.body;
   if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'A valid http(s) URL is required.' });
   try {
-    const pdfRes = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' }
-    });
-    if (!pdfRes.ok) return res.status(502).json({ error: 'Could not download the PDF (status ' + pdfRes.status + ').' });
-    const buffer = Buffer.from(await pdfRes.arrayBuffer());
+    let buffer;
+    try { buffer = await downloadKit(url); } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
 
     // pdf-parse bundles several PDF-reading engines. Each has quirks — one may fail outright on a file
     // another reads fine, or lay out table text differently — so try them in turn until one yields the tables.

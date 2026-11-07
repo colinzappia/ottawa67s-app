@@ -9,6 +9,7 @@
 // It adds   POST /api/fetch-game-prep   { url }   ->   { gameDate, teams: [ { team, coach, record, points, division, conference, prev: [...], next: [...] }, ... ] }
 // The first team is the one listed first in the kit (the left-hand column); the app decides which one is Ottawa.
 
+const { downloadKit } = require('./kit-cache');
 const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 const GAMES_SHOWN = 4;   // the board has four boxes per column
 
@@ -206,9 +207,9 @@ function register(app, pdfParse) {
     const url = req.body && req.body.url;
     if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'A valid http(s) URL is required.' });
     try {
-      const pdfRes = await fetch(url, { headers: { 'User-Agent': BROWSER_UA } });
-      if (!pdfRes.ok) return res.status(502).json({ error: 'Could not download the PDF (status ' + pdfRes.status + ').' });
-      const out = await extractGamePrep(pdfParse, Buffer.from(await pdfRes.arrayBuffer()));
+      let kit;
+      try { kit = await downloadKit(url); } catch (e) { return res.status(e.status || 502).json({ error: e.message }); }
+      const out = await extractGamePrep(pdfParse, kit);
       if (out.error) return res.status(out.status).json({ error: out.error, debugExcerpt: out.debugExcerpt });
       res.json(out);
     } catch (err) {

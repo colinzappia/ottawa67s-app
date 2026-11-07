@@ -86,7 +86,24 @@ function syncOpponentHeader() {
   const oppHeader = document.querySelector('.team-panel.away .team-header span[contenteditable]');
   if (oppHeader) oppHeader.textContent = (name && name !== OPPONENT_NAME_PLACEHOLDER ? name : 'Opponent').toUpperCase();
 }
-document.getElementById('boardOpponentName').addEventListener('input', syncOpponentHeader);
+// The opponent's name is the page's to fill while the box is empty, still shows its starting text, or still holds a
+// name the page filled in itself (so the next game's lineup can replace it). Once you type in the box it's yours and
+// nothing overwrites it.
+function fillOpponentName(text) {
+  const el = document.getElementById('boardOpponentName');
+  const current = el.textContent.trim();
+  if (!current || current === OPPONENT_NAME_PLACEHOLDER || el.dataset.auto === '1') {
+    el.textContent = text;
+    el.dataset.auto = '1';
+    syncOpponentHeader();
+    return true;
+  }
+  return false;
+}
+document.getElementById('boardOpponentName').addEventListener('input', () => {
+  document.getElementById('boardOpponentName').dataset.auto = '';
+  syncOpponentHeader();
+});
 
 function fillBoardFromLineups(data) {
   const ott = data.teams.find(t => t.isOttawa);
@@ -96,8 +113,10 @@ function fillBoardFromLineups(data) {
   fillTeamPanelFromLineup(document.querySelector('.team-panel.away'), opp).forEach(n => notes.push(opp.name + ' has ' + n + ' that the board has no slot for'));
   fillTeamPanelFromLineup(document.querySelector('.team-panel.home'), ott).forEach(n => notes.push(ott.name + ' has ' + n + ' that the board has no slot for'));
 
-  document.getElementById('boardOpponentName').textContent = opp.name;
-  syncOpponentHeader();
+  // The opponent's name comes from the PDF only when you haven't typed one yourself.
+  const nameReplaced = fillOpponentName(opp.name);
+  const typedName = document.getElementById('boardOpponentName').textContent.trim();
+  const keptName = (!nameReplaced && typedName.toLowerCase() !== opp.name.toLowerCase()) ? typedName : null;
 
   if (data.game && data.game.date) {
     const [y, m, d] = data.game.date.split('-').map(Number);
@@ -110,7 +129,7 @@ function fillBoardFromLineups(data) {
   document.getElementById('boardScratchesOtt').textContent = ott.scratches.length ? list(ott.scratches) : 'None';
   if (data.officials && data.officials.referees.length) document.getElementById('boardReferees').textContent = list(data.officials.referees);
   if (data.officials && data.officials.linesmen.length) document.getElementById('boardLinesmen').textContent = list(data.officials.linesmen);
-  return { opp, ott, notes };
+  return { opp, ott, notes, keptName };
 }
 
 function clearLineupsDebug() {
@@ -151,7 +170,7 @@ async function runLineupsRequest(path, payload) {
   catch (err) { statusEl.textContent = 'Read the file but could not place it on the board — please try again.'; return; }
   if (filled.error) { statusEl.textContent = filled.error; return; }
   statusEl.textContent = 'Filled in the lineups for ' + filled.opp.name + ' and ' + filled.ott.name +
-    ', plus scratches, officials and the date.' + (filled.notes.length ? ' Note: ' + filled.notes.join('; ') + '.' : '');
+    ', plus scratches, officials and the date.' + (filled.keptName ? ' Kept the opponent name you typed (' + filled.keptName + ').' : '') + (filled.notes.length ? ' Note: ' + filled.notes.join('; ') + '.' : '');
 }
 
 document.getElementById('lineupsFetchBtn').addEventListener('click', () => {
@@ -267,18 +286,21 @@ function findKitGoalie(pool, slot) {
   return slot.name ? (pool.find(g => sameGoalieName(g.name, slot.name)) || null) : null;
 }
 function fillGoalieRecords(data, opponentTyped) {
-  const filled = [], missing = []; let named = 0;
+  const filled = [], missing = [], unnamed = []; let named = 0;
   [['.team-panel.home', true], ['.team-panel.away', false]].forEach(([sel, isOttawa]) => {
     const table = pickKitTable(data.teams, isOttawa, opponentTyped);
     const pool = table ? table.goalies : data.teams.flatMap(t => t.goalies);
     boardGoalieSlots(document.querySelector(sel)).forEach(slot => {
-      if (slot.placeholder) return;                       // no goalie named on the board yet
+      if (slot.placeholder) {                             // no goalie named on the board yet
+        unnamed.push((isOttawa ? "Ottawa's " : "the opponent's ") + (slot.text ? slot.text.toLowerCase() : 'goalie'));
+        return;
+      }
       named++;
       const hit = findKitGoalie(pool, slot);
       if (hit) { slot.recEl.textContent = goalieRecordText(hit); filled.push(slot.text); } else missing.push(slot.text);
     });
   });
-  return { filled, missing, named };
+  return { filled, missing, unnamed, named };
 }
 function clearGoalieDebug() {
   const b = document.getElementById('goalieRecordsDebug'); if (b) b.remove();
@@ -315,6 +337,10 @@ async function fillGoalieRecordsFromKit(url) {
   if (out.named === 0) return 'Goalie records: load the lineups first, so the board knows which goalies to look up.';
   let msg = out.filled.length ? 'Goalie records filled in for ' + out.filled.join(', ') + '.' : 'Goalie records: none of the goalies on the board were found in the media kit.';
   if (out.missing.length) msg += " Couldn't find " + out.missing.join(', ') + ' in the media kit.';
+  if (out.unnamed.length) {
+    const list = out.unnamed.length > 1 ? out.unnamed.slice(0, -1).join(', ') + ' and ' + out.unnamed[out.unnamed.length - 1] : out.unnamed[0];
+    msg += ` Skipped ${list} — nothing in the box yet. Load the lineups, or type the goalie's number and name, then click again.`;
+  }
   const skipped = (data.teams || []).reduce((n, t) => n + (t.skipped || 0), 0);
   if (skipped) msg += ` (${skipped} goalie row${skipped === 1 ? '' : 's'} in the kit couldn't be read reliably and ${skipped === 1 ? 'was' : 'were'} left out.)`;
   return msg;
@@ -347,8 +373,7 @@ async function fillGamePrepFromKit(url) {
   const opp = data.teams.find(t => t !== ott);
   if (!ott || !opp) return "Coaches and records: couldn't tell which team in the media kit is Ottawa.";
   // Fill in the opponent's name if it hasn't been typed yet (the lineup panel's heading follows it).
-  const oppNameEl = document.getElementById('boardOpponentName');
-  if (!oppNameEl.textContent.trim() || oppNameEl.textContent.trim() === OPPONENT_NAME_PLACEHOLDER) { oppNameEl.textContent = opp.team; syncOpponentHeader(); }
+  fillOpponentName(opp.team);
   const filled = [];
   [[opp, 'Opp'], [ott, 'Ott']].forEach(([t, side]) => {
     if (t.coach) { document.getElementById('boardCoach' + side).textContent = t.coach; filled.push('coach'); }
@@ -374,8 +399,13 @@ document.getElementById('specialtyTeamsFetchBtn').addEventListener('click', asyn
   clearGoalieDebug();
   // The parts are independent: one failing never stops the others. Coaches and records go first, since they fill in
   // the opponent's name, which the PP/PK and goalie parts use to find the opponent.
-  const prepMsg = await fillGamePrepFromKit(url);
-  const [ppMsg, goalieMsg] = await Promise.all([fillSpecialTeamsFromKit(url), fillGoalieRecordsFromKit(url)]);
+  // Each part is guarded on its own, so even an unexpected error in one can never stop the others from running.
+  const guarded = (label, work) => work.catch(err => label + ': something went wrong reading the media kit (' + ((err && err.message) || err) + ').');
+  const prepMsg = await guarded('Coaches and records', fillGamePrepFromKit(url));
+  const [ppMsg, goalieMsg] = await Promise.all([
+    guarded('Power play and penalty kill', fillSpecialTeamsFromKit(url)),
+    guarded('Goalie records', fillGoalieRecordsFromKit(url))
+  ]);
   statusEl.textContent = [prepMsg, ppMsg, goalieMsg].filter(Boolean).join(' ');
 });
 
